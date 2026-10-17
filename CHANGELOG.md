@@ -1,5 +1,10 @@
 # Lịch sử thay đổi
 
+## 0.2.0
+- **Người dùng tự thêm switch / bộ phát WiFi ngay trên card** (nút ✎): chọn nơi cắm (cổng MikroTik hoặc nút khác), gán thiết bị bằng nút 📶, lưu theo người dùng Home Assistant. Hỗ trợ nhiều switch nối tiếp.
+- Khai báo sẵn bằng YAML: `switches`, `access_points[].switch`, `mac_sensor` toàn cục.
+- Làm sạch dữ liệu lưu (tối đa 40 nút, id/khoá hợp lệ), tên nút luôn được thoát HTML.
+
 ## 0.1.0 — bản đầu
 - Sơ đồ cây: Internet (PPPoE/WAN) → MikroTik → cổng/bridge/đường hầm VPN → thiết bị. Đọc thẳng tích hợp MikroTik của Home Assistant, **không cần SNMP**.
 - Đường nối chuyển động theo lưu lượng thật; chip tổng tải ↓↑ và số thiết bị đang kết nối.

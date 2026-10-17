@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml } from '../mikrotik-topo-lan-card.js';
+import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam } from '../mikrotik-topo-lan-card.js';
 
 const mang = JSON.parse(readFileSync(new URL('./fixtures/states.json', import.meta.url), 'utf8'));
 const states = Object.fromEntries(mang.map((s) => [s.entity_id, { state: s.state, attributes: s.attributes }]));
@@ -115,4 +115,68 @@ test('cổng của bộ phát khớp theo id HOẶC tên RouterOS (id theo tên 
   const m = discover(states, {});
   const html = renderHtml(m, {}, {});
   assert.match(html, /data-ids="ether1 ether2"/, 'id ether1 mang tên RouterOS ether2 phải khớp cả hai');
+});
+
+test('switch trung gian: máy sau cổng vào nhóm switch, ZTE nhận máy được khai báo hoặc MAC riêng tư (gợi ý), không gom hết vào ZTE', () => {
+  const cs = [may('Máy có dây', '00:aa:aa:aa:aa:01', '192.168.88.11'), may('Điện thoại', 'da:aa:aa:aa:aa:02', '192.168.88.12'),
+    may('Loa WiFi', '00:aa:aa:aa:aa:03', '192.168.88.13'), may('Khác cổng', '00:bb:bb:bb:bb:01', '192.168.88.14')];
+  const st = { 'sensor.ban_mac': { state: '3', attributes: { ether2: ['00:aa:aa:aa:aa:01', 'da:aa:aa:aa:aa:02', '00:aa:aa:aa:aa:03'] } } };
+  const cfg = {
+    mac_sensor: 'sensor.ban_mac',
+    switches: [{ name: 'Switch phòng khách', port: 'ether2' }],
+    access_points: [{ name: 'ZTE WiFi', switch: 'Switch phòng khách', auto_private_mac: true, macs: ['00:aa:aa:aa:aa:03'] }]
+  };
+  const kq = phanNhom(cs, cfg, {}, st);
+  const nhom = Object.fromEntries(kq.nhom.map((g) => [g.name, g.clients.map((c) => c.name).sort()]));
+  assert.deepEqual(nhom['ZTE WiFi'], ['Loa WiFi', 'Điện thoại'], 'khai báo + MAC riêng tư');
+  assert.deepEqual(nhom['Switch phòng khách'], ['Máy có dây'], 'máy có dây sau switch KHÔNG bị gom vào ZTE');
+  assert.deepEqual(nhom['LAN'], ['Khác cổng']);
+  // tắt gợi ý: điện thoại ở lại nhóm switch; gán tay vẫn thắng
+  const tat = phanNhom(cs, { ...cfg, access_points: [{ ...cfg.access_points[0], auto_private_mac: false }] }, {}, st);
+  assert.ok(tat.nhom.find((g) => g.name === 'Switch phòng khách').clients.some((c) => c.name === 'Điện thoại'));
+  const tay = phanNhom(cs, { ...cfg, access_points: [{ ...cfg.access_points[0], auto_private_mac: false }] }, { 'da:aa:aa:aa:aa:02': 0 }, st);
+  assert.ok(tay.nhom.find((g) => g.name === 'ZTE WiFi').clients.some((c) => c.name === 'Điện thoại'));
+});
+
+test('NGƯỜI DÙNG tự thêm hai switch trên card; bộ phát cắm vào switch thứ hai; máy gán tay theo khoá nút', () => {
+  const cs = [may('Có dây A', '00:aa:aa:aa:aa:01', '192.168.88.11'), may('Có dây B', '00:bb:bb:bb:bb:01', '192.168.88.12'),
+    may('Điện thoại', 'da:cc:cc:cc:cc:01', '192.168.88.13')];
+  const st = { 'sensor.ban_mac': { state: '3', attributes: { ether2: ['00:aa:aa:aa:aa:01', 'da:cc:cc:cc:cc:01'], ether3: ['00:bb:bb:bb:bb:01'] } } };
+  const cfg = { mac_sensor: 'sensor.ban_mac' };
+  const nodes = [
+    { id: 'sw-phong-khach', name: 'Switch phòng khách', kind: 'switch', parent: 'port:ether2' },
+    { id: 'sw-phong-ngu', name: 'Switch phòng ngủ', kind: 'switch', parent: 'port:ether3' },
+    { id: 'zte', name: 'ZTE WiFi', kind: 'ap', parent: 'node:u-sw-phong-khach', tuDong: true }
+  ];
+  const kq = phanNhom(cs, cfg, {}, st, nodes);
+  const theo = Object.fromEntries(kq.nhom.map((g) => [g.name, g.clients.map((c) => c.name).sort()]));
+  assert.deepEqual(theo['Switch phòng khách'], ['Có dây A']);
+  assert.deepEqual(theo['Switch phòng ngủ'], ['Có dây B']);
+  assert.deepEqual(theo['ZTE WiFi'], ['Điện thoại'], 'MAC riêng tư sau cổng gốc của ZTE → nhóm WiFi');
+  // gán tay theo khoá nút: máy có dây A thực ra nằm ở ZTE
+  const tay = phanNhom(cs, cfg, { '00:aa:aa:aa:aa:01': 'u-zte' }, st, nodes);
+  assert.ok(tay.nhom.find((g) => g.name === 'ZTE WiFi').clients.some((c) => c.name === 'Có dây A'));
+  // nơi có thể cắm: cổng MikroTik + nút đã có
+  const m = discover(states, {});
+  const nc = noiCam(m, kq.nut).map((o) => o.value);
+  assert.ok(nc.includes('port:ether1') && nc.includes('node:u-zte'));
+});
+
+test('dữ liệu người dùng bị sửa hỏng (localStorage/user data) được làm sạch, không phá card', () => {
+  const xau = [null, 5, 'x', { id: '<img onerror=1>', name: 'a' }, { id: 'ok', name: '<b>x</b>'.repeat(30), kind: 'lạ', parent: 5 },
+    { id: 'ok', name: 'trùng' }, ...Array.from({ length: 60 }, (_, i) => ({ id: `n${i}`, name: 'n' }))];
+  const sach = lamSachNutNguoiDung(xau);
+  assert.ok(sach.length <= 40);
+  assert.ok(sach.every((u) => /^[a-z0-9_-]{1,40}$/.test(u.id) && u.name.length <= 60 && ['switch', 'ap'].includes(u.kind) && typeof u.parent === 'string'));
+  assert.equal(sach.filter((u) => u.id === 'ok').length, 1, 'id trùng chỉ giữ một');
+  assert.deepEqual(lamSachNutNguoiDung('không-phải-mảng'), []);
+  const gan = lamSachGan({ 'AA:BB:CC:DD:EE:01': 'u-zte', 'khong-phai-mac': 'u-zte', 'aa:bb:cc:dd:ee:02': '<script>', 'aa:bb:cc:dd:ee:03': 2, 'aa:bb:cc:dd:ee:04': 9999 });
+  assert.deepEqual(gan, { 'aa:bb:cc:dd:ee:01': 'u-zte', 'aa:bb:cc:dd:ee:03': 2 });
+  assert.deepEqual(lamSachGan([1, 2]), {});
+  // render với dữ liệu hỏng đã làm sạch và tên nút chứa HTML: không thành thẻ
+  const nodes = lamSachNutNguoiDung([{ id: 'a', name: '<img src=x onerror=alert(1)>', kind: 'switch', parent: 'port:ether2' }]);
+  const html = renderHtml(discover(states, {}), {}, { nodes, edit: true, states, gan: {} });
+  assert.ok(!html.includes('<img'), 'tên nút do người dùng nhập không được thành HTML');
+  assert.match(html, /data-act="them-nut"/, 'ở chế độ sửa có biểu mẫu thêm nút');
+  assert.match(html, /data-act="xoa-nut"/, 'nút do người dùng thêm có nút xoá');
 });

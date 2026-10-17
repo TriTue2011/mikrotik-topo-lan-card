@@ -36,23 +36,34 @@ Card tự nhận WAN (cổng PPPoE/L2TP…), cổng, bridge, đường hầm Wir
 | `language` | `vi` | `vi` hoặc `en` |
 | `access_points` | | Bộ phát WiFi, xem dưới |
 
-## Nhà chỉ có MỘT bộ phát WiFi (ví dụ ZTE) — gán thiết bị cho nó
-MikroTik chỉ thấy **một** thiết bị là bộ phát WiFi cắm vào một cổng; mọi máy dùng WiFi sau nó đều hiện là máy trên `BridgeLAN` như máy có dây
-(tích hợp Home Assistant không ghi cổng vật lý của từng máy). Muốn thấy «máy nào đi qua ZTE», khai báo bộ phát và cách nhận máy của nó:
+## Tự thêm switch và bộ phát WiFi (không cần sửa YAML)
+MikroTik chỉ thấy MAC theo **cổng**: nếu cổng đi qua thêm một (hoặc hai) switch rồi mới tới bộ phát WiFi (ví dụ ZTE), mọi máy phía sau đều hiện là máy trên `BridgeLAN`.
+Vì vậy sơ đồ cho **người dùng tự dựng đường đi** ngay trên card:
 
+1. Bấm nút **✎** ở đầu card → mục «Thêm nút vào sơ đồ».
+2. Đặt **tên**, chọn **loại** (Switch hoặc Bộ phát WiFi) và **cắm vào** đâu: một cổng của MikroTik, hoặc một nút đã thêm (ví dụ ZTE cắm vào «Switch phòng khách»).
+3. (Bộ phát WiFi) tick «Gợi ý: máy MAC riêng tư…» nếu muốn card tự đưa điện thoại (MAC ngẫu nhiên) sau cổng đó vào nhóm WiFi.
+4. Cạnh mỗi thiết bị có nút **📶**: bấm để gán thiết bị vào nút kế tiếp (switch → bộ phát → bỏ gán).
+
+Nút và phần gán được lưu **theo người dùng Home Assistant** (đồng bộ giữa thiết bị; có `localStorage` dự phòng) — không cần chép tay giữa máy tính và điện thoại.
+Cho phép tối đa 40 nút. Dữ liệu lưu bị sửa hỏng sẽ được làm sạch khi đọc.
+
+Muốn khai sẵn bằng YAML (tuỳ chọn, cùng ý nghĩa):
 ```yaml
 type: custom:mikrotik-topo-lan-card
+mac_sensor: sensor.mikrotik_bang_mac      # bảng MAC theo cổng (xem dưới) — để tự biết máy nào nằm sau cổng nào
+switches:
+  - { name: Switch phòng khách, port: ether2 }
+  - { name: Switch phòng ngủ,   port: ether3 }
 access_points:
   - name: ZTE WiFi
-    port: ether2                 # cổng (id hoặc tên RouterOS) nơi cắm bộ phát — để vẽ đường nối
-    entity: device_tracker.zte   # (tuỳ chọn) chính bộ phát, để hiện chấm trạng thái
-    mac_sensor: sensor.mikrotik_bang_mac   # (khuyên dùng) tự gán theo bảng MAC của cổng, xem dưới
-    # macs: ["AA:BB:CC:DD:EE:01"]  # hoặc khai tay
-    # ips: ["192.168.88.50"]
+    switch: Switch phòng khách     # ZTE cắm vào switch này (hoặc dùng `port:` nếu cắm thẳng vào router)
+    entity: device_tracker.zte     # (tuỳ chọn) chấm trạng thái
+    auto_private_mac: true         # (tuỳ chọn) gợi ý máy MAC riêng tư vào nhóm WiFi
+    # macs: ["AA:BB:CC:DD:EE:01"]  # hoặc khai rõ máy của bộ phát; ips: [...]
 ```
-Ba cách gán, ưu tiên từ trên xuống: (1) **gán tay** bằng nút 📶 cạnh mỗi thiết bị (lưu trong trình duyệt, bấm tiếp để đổi bộ phát / bỏ gán),
-(2) `macs` / `ips` / `mac_sensor` trong cấu hình, (3) giao diện tên `wlan*`/`wifi*` (khi chính MikroTik phát WiFi) vào nhóm «WiFi (MikroTik)».
-Dấu `◌` cạnh thiết bị = MAC «riêng tư» (địa chỉ ngẫu nhiên của điện thoại), thường là máy dùng WiFi — chỉ để gợi ý.
+Thứ tự ưu tiên khi quyết định một thiết bị thuộc nút nào: gán tay → khai báo rõ (`macs`/`ips`) → gợi ý MAC riêng tư → switch mà máy nằm sau cổng của nó → giao diện `wlan`/`wifi` của MikroTik → nhóm «LAN».
+Dấu `◌` cạnh thiết bị = MAC «riêng tư» (địa chỉ ngẫu nhiên của điện thoại), chỉ là gợi ý.
 
 ### Tự gán theo bảng MAC của cổng (không cần SNMP của bộ phát)
 MikroTik học MAC của mọi máy sau cổng cắm bộ phát. `tools/mikrotik_bridge_hosts.py` đọc bảng đó (chỉ ĐỌC) và in `{"ether2": ["AA:…", …], …}`:
@@ -71,7 +82,7 @@ command_line:
       json_attributes: [ether2, ether3, ether4]   # các cổng bạn cần
 ```
 (`secrets` không tự thay trong chuỗi lệnh: dùng `shell_command`/biến môi trường theo cách bạn quen, hoặc chép mật khẩu vào tệp chỉ root đọc được.) Thêm `--tls --port 8729 --insecure` nếu dùng API-SSL với chứng chỉ tự ký.
-Tên thuộc tính trùng tên cổng trong `access_points[].port` (hoặc đặt `mac_attr`).
+Thuộc tính của cảm biến đặt theo **tên cổng** (`ether2`…) khớp với cổng bạn cho nút cắm vào.
 
 ## Về SNMP
 Card **không cần SNMP**. MikroTik có hỗ trợ SNMP, nhưng nhiều bộ phát WiFi do nhà mạng cấp (ví dụ ZTE E2633) **có thể không** cho người dùng bật SNMP; cách gán theo bảng MAC ở trên không phụ thuộc vào nó.
