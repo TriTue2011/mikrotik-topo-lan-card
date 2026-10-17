@@ -1,5 +1,12 @@
 # Lịch sử thay đổi
 
+## 0.4.2
+- **Chọn nguồn cho từng thiết bị** bằng ô chọn trên dòng (thay nút 📶); lựa chọn lưu theo người dùng HA.
+- **`default_source`**: thiết bị có dây chưa có nguồn vào switch/bộ phát khai sẵn.
+- **`ips` trên bộ phát** (ví dụ ZTE): chính router ZTE nằm trong hộp của nó, không còn trong nhóm LAN.
+- **Bridge LAN** là hộp lớn, tên bridge làm tiêu đề; **hộp host** hiện IP/MAC đã khai khi chưa khớp thiết bị.
+- Khóa nút (host, LXC…) được lưu lại khi tải lại.
+
 ## 0.4.1
 - **Sơ đồ theo cây**: mỗi thiết bị là một hộp nhỏ, nét đứt từ nguồn đã cài (switch, bộ phát WiFi, hộp host).
 - **Hộp lồng nhiều tầng**: `hosts` lồng `children` tới nhiều tầng; máy có tiền tố MAC (`guest_mac_prefix`) tự thành hộp con (LXC/VM); `guest_source` chọn nguồn cho chúng.
