@@ -434,20 +434,15 @@ export function noiCam(model, nut) {
   ];
 }
 
-/** Hộp MikroTik trong sơ đồ: tab lồng bên trong gồm WAN và Bridge LAN. Thông tin lấy tự động từ tích hợp. */
+/** Hộp MikroTik trong sơ đồ: khối WAN (trên) và khối Bridge LAN (dưới); trong Bridge LAN có từng cổng ether. Tự lấy thông số. */
 function renderRouterBox(model, cfg, ui, t) {
   const { wan, wanCong, ports, bridges } = model;
   const kv = (nhan, gia) => (gia === '' || gia == null ? '' : `<div class="kv"><span>${esc(nhan)}</span><b>${esc(gia)}</b></div>`);
   const trangThai = (g) => (g.running === true ? t.dangChay : g.running === false ? t.ngung : '—');
-  const rtab = ui.rtab === 'bridge' ? 'bridge' : 'wan';
-  const thanhTab = `<div class="rtab-hang">${[['wan', t.subWan], ['bridge', t.subBridge]]
-    .map(([k, n]) => `<button class="rtab ${rtab === k ? 'on' : ''}" data-rtab="${k}" aria-selected="${rtab === k}">${esc(n)}</button>`).join('')}</div>`;
-  let noiDung;
-  if (rtab === 'wan') {
-    noiDung = !wan ? `<div class="phu">${esc(t.noWan)}</div>` : `<div class="wan-khoi">
-      <div class="wan-tieu">${chamTrangThai(wan.running)}<b>${esc(cfg.isp_name || wan.comment || t.internet)}</b><span class="phu">${esc(wan.name)}</span></div>
+
+  const wanHtml = !wan ? `<div class="hop-con"><div class="phu">${esc(t.noWan)}</div></div>` : `<div class="hop-con wan-hop">
+      <div class="wan-tieu">${chamTrangThai(wan.running)}<b>WAN</b><span>${esc(cfg.isp_name || wan.comment || t.internet)}</span><span class="phu">${esc(wan.name)}</span></div>
       <div class="wan-luoi">
-        ${kv(t.isp, cfg.isp_name || wan.comment)}
         ${kv(t.kieu, wan.type)}
         ${kv(t.ipAddr, wan.ip)}
         ${kv(t.mtuLbl, wan.mtu)}
@@ -456,34 +451,38 @@ function renderRouterBox(model, cfg, ui, t) {
         ${kv(t.nowRate, `↓ ${fmtRate(wan.rx)} ↑ ${fmtRate(wan.tx)}`)}
         ${kv(t.totalTx, `↓ ${fmtBytes(wan.rxTong)} ↑ ${fmtBytes(wan.txTong)}`)}
       </div>
-      ${wanCong ? `<div class="tieu-nhom">${esc(t.cong)} ${esc(wanCong.name)}</div><div class="wan-luoi">
-        ${kv(t.trangThai || 'Trạng thái', trangThai(wanCong))}
-        ${kv(t.mtuLbl, wanCong.mtu)}
-        ${kv(t.lastUpLbl, wanCong.lastUp)}
-        ${kv(t.linkDowns, wanCong.linkDowns)}
-        ${kv(t.ipAddr, wanCong.ip)}
-        ${kv(t.totalTx, `↓ ${fmtBytes(wanCong.rxTong)} ↑ ${fmtBytes(wanCong.txTong)}`)}
-      </div>` : ''}
+      ${wanCong ? `<div class="cong-hop">
+        <div class="hang ${wanCong.running ? '' : 'off'}">${chamTrangThai(wanCong.running)}<span class="ten">${esc(wanCong.name)}</span>${dongLuuLuong(wanCong.rx, wanCong.tx, t)}</div>
+        <div class="wan-luoi">
+          ${kv(t.trangThai || 'Trạng thái', trangThai(wanCong))}
+          ${kv(t.mtuLbl, wanCong.mtu)}
+          ${kv(t.linkDowns, wanCong.linkDowns)}
+          ${kv(t.lastUpLbl, wanCong.lastUp)}
+          ${kv(t.ipAddr, wanCong.ip)}
+          ${kv(t.totalTx, `↓ ${fmtBytes(wanCong.rxTong)} ↑ ${fmtBytes(wanCong.txTong)}`)}
+        </div></div>` : ''}
     </div>`;
-  } else {
-    // Bridge LAN: chọn các cổng ether trong bridge (mặc định: mọi cổng nội bộ, trừ WAN); lựa chọn lưu theo người dùng HA.
-    const macDinh = ports.map((g) => g.name);
-    const thanhVien = Array.isArray(ui.bridge) ? ui.bridge : (Array.isArray(cfg.bridge_ports) ? cfg.bridge_ports : macDinh);
-    const cong = ports.filter((g) => thanhVien.includes(g.name));
-    const br = bridges[0];
-    noiDung = `<div class="bridge-khoi" data-members="${esc(thanhVien.join(','))}">
-      <div class="wan-tieu">${chamTrangThai(br ? br.running : null)}<b>${esc(br ? br.name : 'Bridge')}</b><span class="phu">${esc(br && br.comment ? br.comment : '')}</span></div>
+
+  // Bridge LAN: mặc định gồm mọi cổng nội bộ (trừ WAN); lựa chọn lưu theo người dùng HA.
+  const macDinh = ports.map((g) => g.name);
+  const thanhVien = Array.isArray(ui.bridge) ? ui.bridge : (Array.isArray(cfg.bridge_ports) ? cfg.bridge_ports : macDinh);
+  const cong = ports.filter((g) => thanhVien.includes(g.name));
+  const br = bridges[0];
+  const bridgeHtml = `<div class="hop-con bridge-khoi" data-members="${esc(thanhVien.join(','))}">
+      <div class="wan-tieu">${chamTrangThai(br ? br.running : null)}<b>BRIDGE LAN</b><span>${esc(br ? br.name : '')}</span></div>
       <div class="cong-chon">${ports.map((g) => `<label class="chon-cong"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}> ${esc(g.name)}</label>`).join('') || `<span class="phu">${esc(t.chuaCo)}</span>`}</div>
-      ${cong.map((g) => `<div class="cong-the"><div class="hang ${g.running ? '' : 'off'}">${chamTrangThai(g.running)}<span class="ten">${esc(g.name)}</span>${dongLuuLuong(g.rx, g.tx, t)}</div><div class="wan-luoi">
-        ${kv(t.trangThai || 'Trạng thái', trangThai(g))}
-        ${kv(t.mtuLbl, g.mtu)}
-        ${kv(t.linkDowns, g.linkDowns)}
-        ${kv(t.lastUpLbl, g.lastUp)}
-        ${kv(t.totalTx, `↓ ${fmtBytes(g.rxTong)} ↑ ${fmtBytes(g.txTong)}`)}
-      </div></div>`).join('') || `<div class="phu">${esc(t.none)}</div>`}
+      ${cong.map((g) => `<div class="cong-hop">
+        <div class="hang ${g.running ? '' : 'off'}">${chamTrangThai(g.running)}<span class="ten">${esc(g.name)}</span>${dongLuuLuong(g.rx, g.tx, t)}</div>
+        <div class="wan-luoi">
+          ${kv(t.trangThai || 'Trạng thái', trangThai(g))}
+          ${kv(t.mtuLbl, g.mtu)}
+          ${kv(t.linkDowns, g.linkDowns)}
+          ${kv(t.lastUpLbl, g.lastUp)}
+          ${kv(t.totalTx, `↓ ${fmtBytes(g.rxTong)} ↑ ${fmtBytes(g.txTong)}`)}
+        </div>
+      </div>`).join('')}
     </div>`;
-  }
-  return `${thanhTab}<div class="rtab-noi">${noiDung}</div>`;
+  return `${wanHtml}${bridgeHtml}`;
 }
 
 export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
@@ -695,9 +694,8 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .hang-nut{display:flex;gap:8px}
 .cot-router{min-width:280px}
 .cot-router .nut-node.chinh{min-height:520px}
-.rtab-hang{display:flex;gap:6px;margin:10px 0 8px;flex-wrap:wrap}
-.rtab{padding:6px 14px;border-radius:14px;border:1px solid var(--divider-color,#555);background:transparent;color:var(--secondary-text-color);cursor:pointer;font:inherit}
-.rtab.on{color:var(--primary-color,#03a9f4);border-color:var(--primary-color,#03a9f4)}
+.hop-con{border:1px solid var(--divider-color,#444);border-radius:12px;padding:8px 10px;margin:8px 0}
+.cong-hop{border:1px solid var(--divider-color,#444);border-radius:10px;padding:6px 8px;margin:6px 0}
 .tab-con-hang{display:flex;gap:6px;padding:0 12px 10px;flex-wrap:wrap}
 .tab-con{padding:5px 12px;border-radius:12px;border:1px solid var(--divider-color,#555);background:transparent;color:var(--secondary-text-color);cursor:pointer;font:inherit;font-size:.9rem}
 .tab-con.on{color:var(--primary-color,#03a9f4);border-color:var(--primary-color,#03a9f4)}

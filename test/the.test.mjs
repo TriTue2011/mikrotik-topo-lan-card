@@ -361,7 +361,7 @@ test('cổng có data-name là tên RouterOS (ether2 của thực thể ether1),
 
 
 
-test('hộp Router có tab lồng WAN và Bridge LAN; WAN hiện IP và MTU; Bridge LAN mặc định gồm cổng nội bộ, không gồm WAN', () => {
+test('hộp MikroTik: khối WAN và khối Bridge LAN xếp chồng; trong Bridge LAN có từng cổng ether; WAN không nằm trong bridge mặc định', () => {
   const st = {
     'switch.mikrotik_router_ppp_pppoe_out1_port': { state: 'on', attributes: { name: 'pppoe-out1', type: 'pppoe-out', running: true, comment: 'FPT PPPoE', actual_mtu: 1492, link_downs: 0 } },
     'sensor.mikrotik_router_ppp_pppoe_out1_ip_address': { state: '1.52.139.243', attributes: {} },
@@ -370,17 +370,16 @@ test('hộp Router có tab lồng WAN và Bridge LAN; WAN hiện IP và MTU; Bri
     'switch.mikrotik_router_port_ether4_port': { state: 'on', attributes: { name: 'WAN-ETHER1', type: 'ether', running: true, status: 'link-ok', actual_mtu: 1500, link_downs: 0 } },
   };
   const m = discover(st, {});
-  const wan = renderHtml(m, {}, { rtab: 'wan', states: st, gan: {}, nodes: [] });
-  assert.match(wan, /rtab on" data-rtab="wan"/);
-  assert.match(wan, /1\.52\.139\.243/);
-  assert.match(wan, /<span>MTU<\/span><b>1492<\/b>/);
-  const bridge = renderHtml(m, {}, { rtab: 'bridge', states: st, gan: {}, nodes: [] });
-  assert.match(bridge, /rtab on" data-rtab="bridge"/);
-  assert.match(bridge, /data-port="ether2"[^>]*checked/);
-  assert.match(bridge, /data-port="ether3"[^>]*checked/);
-  assert.doesNotMatch(bridge, /data-port="WAN-ETHER1"[^>]*checked/, 'WAN không nằm trong bridge mặc định');
-  const boChon = renderHtml(m, {}, { rtab: 'bridge', bridge: ['ether2'], states: st, gan: {}, nodes: [] });
+  const html = renderHtml(m, {}, { states: st, gan: {}, nodes: [] });
+  assert.match(html, /wan-hop/);
+  assert.match(html, /1\.52\.139\.243/);
+  assert.match(html, /<span>MTU<\/span><b>1492<\/b>/);
+  assert.match(html, /BRIDGE LAN/);
+  assert.match(html, /data-port="ether2"[^>]*checked/);
+  assert.match(html, /data-port="ether3"[^>]*checked/);
+  assert.doesNotMatch(html, /data-port="WAN-ETHER1"[^>]*checked/, 'WAN không nằm trong bridge mặc định');
+  assert.doesNotMatch(html, /rtab/, 'không còn tab lồng');
+  const boChon = renderHtml(m, {}, { bridge: ['ether2'], states: st, gan: {}, nodes: [] });
   assert.match(boChon, /data-port="ether2"[^>]*checked/);
   assert.doesNotMatch(boChon, /data-port="ether3"[^>]*checked/);
-  assert.doesNotMatch(renderHtml(m, {}, { states: st, gan: {}, nodes: [] }), /class="tab-the/, 'không còn thanh tab trên cùng');
 });
