@@ -289,7 +289,9 @@ test('dòng máy WiFi hiện MAC, băng tần, RSSI, chế độ và tốc độ
   m.clients = [{ mac: '02:00:00:00:00:31', ip: '172.16.10.31', name: 'May ZTE', interface: 'BridgeLAN', source: 'dhcp', online: true }];
   const html = renderHtml(m, cfg, { states: st, gan: {}, nodes: [] });
   assert.match(html, /02:00:00:00:00:31/);
-  assert.match(html, /5G · -61 dBm · 802\.11ax · ↓ 1\.20 Mbps ↑ 800 kbps/);
+  assert.match(html, /5G · -61 dBm · 802\.11ax/);
+  assert.match(html, /↓<\/b>1\.20 Mbps/);
+  assert.match(html, /↑<\/b>800 kbps/);
 });
 
 test('VPN: giao diện WireGuard không phải cổng; peer gắn vào đúng giao diện; ra Internet (0.0.0.0/0) tách với truy cập từ xa', () => {

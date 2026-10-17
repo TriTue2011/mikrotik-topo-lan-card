@@ -563,8 +563,9 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     const w = wifi[macChuan(c.mac)];
     if (!w) return '';
     const nhan = [w.band, w.rssi != null ? `${w.rssi} dBm` : '', w.mode].filter(Boolean).join(' · ');
-    const toc = [w.rxRate != null ? `↓ ${fmtRate(w.rxRate)}` : '', w.txRate != null ? `↑ ${fmtRate(w.txRate)}` : ''].filter(Boolean).join(' ');
-    return nhan || toc ? `<span class="goi" title="${esc(w.mode)}">${esc([nhan, toc].filter(Boolean).join(' · '))}</span>` : '';
+    // Tốc độ TX/RX của máy WiFi: hiện như cổng (↓ ↑ và thanh), tách khỏi băng tần/RSSI.
+    const toc = w.rxRate != null || w.txRate != null ? `${dongLuuLuong(w.rxRate || 0, w.txRate || 0, t)}${thanh((w.rxRate || 0) + (w.txRate || 0))}` : '';
+    return `${nhan ? `<span class="goi" title="${esc(w.mode)}">${esc(nhan)}</span>` : ''}${toc}`;
   };
   const hangMay = (c) => `
     <div class="hang may ${c.online ? '' : 'off'}" title="${esc(c.mac)} · ${esc(c.interface)} · ${esc(c.source)}">
