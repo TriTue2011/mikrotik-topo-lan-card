@@ -90,6 +90,8 @@ export function discover(states, cfg = {}) {
   const tienTo = cfg.prefix || detectPrefix(states) || 'mikrotik_router';
   const P = reEsc(tienTo);
   const reLuuLuong = new RegExp(`^sensor\\.${P}_(port|bridge|ppp)_(.+)_(rx|tx)$`);
+  const reTong = new RegExp(`^sensor\\.${P}_(port|bridge|ppp)_(.+)_(rx|tx)_total$`);
+  const reIpCong = new RegExp(`^sensor\\.${P}_(port|bridge|ppp)_(.+)_ip_address$`);
   const reWg = new RegExp(`^sensor\\.${P}_wireguard_(.+)_(rx|tx)$`);
   const reWgBatTay = new RegExp(`^sensor\\.${P}_wireguard_(.+)_last_handshake$`);
   const reKetNoi = new RegExp(`^binary_sensor\\.${P}_(port|bridge|ppp)_(.+)_connection$`);
@@ -100,7 +102,8 @@ export function discover(states, cfg = {}) {
   const duongHam = new Map();
   const lay = (loai, id) => {
     const k = `${loai}:${id}`;
-    if (!giaoDien.has(k)) giaoDien.set(k, { key: k, id, kind: loai, name: id, comment: '', running: null, type: '', rx: 0, tx: 0 });
+    if (!giaoDien.has(k)) giaoDien.set(k, { key: k, id, kind: loai, name: id, comment: '', running: null, type: '', rx: 0, tx: 0,
+      rxTong: 0, txTong: 0, ip: '', status: '', mtu: null, linkDowns: null, lastUp: '' });
     return giaoDien.get(k);
   };
   const ham = (id) => {
@@ -122,6 +125,13 @@ export function discover(states, cfg = {}) {
       const gd = lay(m[1], m[2]);
       gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
       gd.running = typeof a.running === 'boolean' ? a.running : on(s.state);
+      gd.status = a.status || gd.status; gd.mtu = a.actual_mtu != null ? a.actual_mtu : gd.mtu;
+      gd.linkDowns = a.link_downs != null ? a.link_downs : gd.linkDowns; gd.lastUp = a.last_link_up_time || gd.lastUp;
+    } else if ((m = reTong.exec(eid))) {
+      const gd = lay(m[1], m[2]);
+      gd[m[3] + 'Tong'] = toBytes(s.state, a.unit_of_measurement);
+    } else if ((m = reIpCong.exec(eid))) {
+      lay(m[1], m[2]).ip = String(s.state || '');
     } else if ((m = reKetNoi.exec(eid))) {
       lay(m[1], m[2]).running = on(s.state);
     } else if ((m = reWg.exec(eid))) {
@@ -150,7 +160,8 @@ export function discover(states, cfg = {}) {
   const core = {
     cpu: so(loi('cpu_load')), ram: so(loi('memory_usage')), hdd: so(loi('hdd_usage')),
     uptime: loi('uptime') ? loi('uptime').state : '', wired: so(loi('wired_clients')), wireless: so(loi('wireless_clients')),
-    version: capNhat && capNhat.attributes ? (capNhat.attributes.installed_version || '') : ''
+    version: capNhat && capNhat.attributes ? (capNhat.attributes.installed_version || '') : '',
+    latest: capNhat && capNhat.attributes ? (capNhat.attributes.latest_version || '') : ''
   };
   const tatCa = [...giaoDien.values()];
   const wan = cfg.wan
@@ -170,6 +181,7 @@ export function discover(states, cfg = {}) {
   return {
     core, wan: wan ? hienThi(wan) : null, ports, bridges, ppp: pppKhac,
     // Chỉ hiện đường hầm và thiết bị đang kết nối; peer báo ngắt (connected === false) thì không hiện.
+    wanCong: tatCa.find((g) => g.kind === 'port' && /wan/i.test(g.name || '')) || null,
     tunnels: [...duongHam.values()].filter((h) => !an.has(h.id) && h.connected !== false),
     vpn: { ifaces: vpnIfaces, peers: [...duongHam.values()].filter((h) => !an.has(h.id) && h.connected !== false) },
     // Chỉ thiết bị báo đang kết nối (device_tracker = home); thiết bị ngắt không hiện trên card.
@@ -342,6 +354,12 @@ export function phanNhom(clients, cfg = {}, gan = {}, states = {}, userNodes = [
   };
 }
 
+/** Danh sách cổng trong bridge: chỉ giữ tên cổng hợp lệ (ether2, sfp1…); không phải danh sách thì null (dùng mặc định). */
+export function lamSachCong(v) {
+  if (!Array.isArray(v)) return null;
+  return [...new Set(v.filter((x) => typeof x === 'string' && /^[a-z0-9_-]{1,20}$/i.test(x)))];
+}
+
 /** Danh sách nút người dùng AN TOÀN: bỏ phần tử sai khuôn (dữ liệu từ localStorage/HA user data có thể bị sửa hỏng). */
 export function lamSachNutNguoiDung(v) {
   if (!Array.isArray(v)) return [];
@@ -372,6 +390,10 @@ const CHU = {
   vi: {
     title: 'Mạng LAN MikroTik', internet: 'Internet', router: 'MikroTik', ports: 'Cổng', tunnels: 'Đường hầm VPN', clients: 'Thiết bị',
     wgTitle: 'VPN WireGuard', batTay: 'bắt tay', truoc: 'trước', tong: 'tổng', vpnRa: 'đi ra Internet', vpnVao: 'truy cập từ xa',
+    tabSoDo: 'Sơ đồ', tabRouter: 'MikroTik', sectRouter: 'Router', sectWan: 'WAN', sectBridge: 'Bridge LAN', sectPorts: 'Cổng',
+    sectVpn: 'VPN WireGuard', loai: 'loại', ngat: 'ngắt', lenCuoi: 'lên lần cuối', updateNew: 'có bản mới', wired: 'Máy có dây', wireless: 'Máy WiFi', noWan: 'Chưa có WAN',
+    subTong: 'Tổng quan', subWan: 'WAN', subBridge: 'Bridge LAN', dangChay: 'đang chạy', ngung: 'ngưng', isp: 'Nhà mạng', cong: 'Cổng', ipAddr: 'Địa chỉ IP',
+    mtuLbl: 'MTU', lastUpLbl: 'Lên lần cuối', nowRate: 'Tốc độ hiện tại', totalTx: 'Tổng đã truyền', linkDowns: 'Lần rớt link', bridgeNote: 'Các cổng trong bridge cùng một mạng LAN: thiết bị cắm vào các cổng này giao tiếp được với nhau, trừ khi có VLAN hoặc bộ lọc chặn.', chonCong: 'Cổng trong bridge', chuaCo: 'Chưa có dữ liệu', kieu: 'Kiểu', chiTietCong: 'Chi tiết',
     search: 'Tìm tên, IP, MAC…', more: 'Xem thêm', none: 'Không có dữ liệu — kiểm tra tiền tố (prefix) và tích hợp MikroTik.',
     up: 'lên', down: 'xuống', online: 'đang kết nối', cpu: 'CPU', ram: 'RAM', uptime: 'Hoạt động', noClients: 'Chưa có thiết bị',
     connected: 'đã kết nối', disconnected: 'ngắt', assign: 'Gán vào', unassign: 'Bỏ gán', wifiHint: 'MAC riêng tư — thường là máy dùng WiFi',
@@ -382,6 +404,10 @@ const CHU = {
   en: {
     title: 'MikroTik LAN', internet: 'Internet', router: 'MikroTik', ports: 'Ports', tunnels: 'VPN tunnels', clients: 'Devices',
     wgTitle: 'VPN WireGuard', batTay: 'handshake', truoc: 'ago', tong: 'total', vpnRa: 'exit via Internet', vpnVao: 'remote access',
+    tabSoDo: 'Diagram', tabRouter: 'MikroTik', sectRouter: 'Router', sectWan: 'WAN', sectBridge: 'Bridge LAN', sectPorts: 'Ports',
+    sectVpn: 'VPN WireGuard', loai: 'type', ngat: 'down', lenCuoi: 'last up', updateNew: 'new version', wired: 'Wired devices', wireless: 'WiFi devices', noWan: 'No WAN',
+    subTong: 'Overview', subWan: 'WAN', subBridge: 'Bridge LAN', dangChay: 'running', ngung: 'stopped', isp: 'ISP', cong: 'Port', ipAddr: 'IP address',
+    mtuLbl: 'MTU', lastUpLbl: 'Last link up', nowRate: 'Current rate', totalTx: 'Total transferred', linkDowns: 'Link drops', bridgeNote: 'Ports in the bridge share one LAN: devices on these ports can reach each other unless VLANs or filters block it.', chonCong: 'Ports in bridge', chuaCo: 'No data', kieu: 'Type', chiTietCong: 'Details',
     search: 'Search name, IP, MAC…', more: 'Show more', none: 'No data — check the prefix and the MikroTik integration.',
     up: 'up', down: 'down', online: 'online', cpu: 'CPU', ram: 'RAM', uptime: 'Uptime', noClients: 'No devices',
     connected: 'connected', disconnected: 'down', assign: 'Assign to', unassign: 'Unassign', wifiHint: 'Private MAC — usually a WiFi device',
@@ -408,12 +434,90 @@ export function noiCam(model, nut) {
   ];
 }
 
+/** Thanh chuyển tab của card: Sơ đồ / MikroTik. */
+function tabBar(t, ui) {
+  const dang = ui && ui.tab === 'mikrotik' ? 'mikrotik' : 'so-do';
+  return `<div class="tabs-the" role="tablist">
+    <button class="tab-the ${dang === 'so-do' ? 'on' : ''}" data-tab="so-do" role="tab" aria-selected="${dang === 'so-do'}">${esc(t.tabSoDo)}</button>
+    <button class="tab-the ${dang === 'mikrotik' ? 'on' : ''}" data-tab="mikrotik" role="tab" aria-selected="${dang === 'mikrotik'}">${esc(t.tabRouter)}</button>
+  </div>`;
+}
+
+/** Tab MikroTik (có các tab con: Tổng quan, WAN, Bridge LAN). Thông tin lấy tự động từ tích hợp. */
+function renderRouterCard(model, cfg, ui, now) {
+  const t = CHU[cfg.language === 'en' ? 'en' : 'vi'];
+  const { core, wan, wanCong, ports, bridges, ppp, vpn } = model;
+  const sub = ['tong-quan', 'wan', 'bridge'].includes(ui.sub) ? ui.sub : 'tong-quan';
+  const thanhCon = `<div class="tab-con-hang">${[['tong-quan', t.subTong], ['wan', t.subWan], ['bridge', t.subBridge]]
+    .map(([k, n]) => `<button class="tab-con ${sub === k ? 'on' : ''}" data-sub="${k}" aria-selected="${sub === k}">${esc(n)}</button>`).join('')}</div>`;
+  const kv = (nhan, gia) => (gia === '' || gia == null ? '' : `<div class="kv"><span>${esc(nhan)}</span><b>${esc(gia)}</b></div>`);
+  const trangThai = (g) => (g.running === true ? t.dangChay : g.running === false ? t.ngung : '—');
+  const dong = (g) => `<div class="hang ${g.running ? '' : 'off'}" title="${esc(g.name)}">${chamTrangThai(g.running)}<span class="ten">${esc(g.label || g.name)}</span>${dongLuuLuong(g.rx, g.tx, t)}<span class="lu">${esc(t.tong)} ↓ ${esc(fmtBytes(g.rxTong))} ↑ ${esc(fmtBytes(g.txTong))}</span>${g.ip ? `<span class="lu">${esc(g.ip)}</span>` : ''}</div>`;
+  const chiTietCong = (g) => `<div class="cong-chi-tiet">${kv(t.dangChay === 'running' ? 'Status' : 'Trạng thái', trangThai(g))}${kv(t.kieu, g.type)}${kv(t.mtuLbl, g.mtu)}${kv(t.lastUpLbl, g.lastUp)}${kv(t.linkDowns, g.linkDowns)}${kv(t.nowRate, `↓ ${fmtRate(g.rx)} ↑ ${fmtRate(g.tx)}`)}${kv(t.totalTx, `↓ ${fmtBytes(g.rxTong)} ↑ ${fmtBytes(g.txTong)}`)}${kv(t.ipAddr, g.ip)}${kv(t.chiTietCong, g.comment)}</div>`;
+
+  let noiDung = '';
+  if (sub === 'tong-quan') {
+    const chips = [
+      core.cpu != null ? `CPU ${core.cpu}%` : '', core.ram != null ? `RAM ${core.ram}%` : '', core.hdd != null ? `HDD ${core.hdd}%` : '',
+      core.uptime ? `${t.uptime} ${fmtUptime(core.uptime, now)}` : '',
+      core.version ? `RouterOS ${core.version}${core.latest && core.latest !== core.version ? ` (${t.updateNew} ${core.latest})` : ''}` : '',
+      core.wired != null ? `${t.wired} ${core.wired}` : '', core.wireless != null ? `${t.wireless} ${core.wireless}` : ''
+    ].filter(Boolean);
+    noiDung = `<div class="hang-chip">${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div>
+      <div class="tieu-nhom">${esc(t.ports)}</div>${ports.map(dong).join('') || `<div class="phu">${esc(t.none)}</div>`}
+      ${ppp.length ? `<div class="tieu-nhom">PPP</div>${ppp.map(dong).join('')}` : ''}
+      <div class="tieu-nhom">${esc(t.sectVpn)}</div>${vpn.ifaces.map(dong).join('')}${vpn.peers.map((h) => `<div class="hang ham ${h.connected ? '' : 'off'}">${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span>${h.batTay != null ? `<span class="lu">${esc(t.batTay)} ${esc(Math.round(h.batTay))} s ${esc(t.truoc)}</span>` : ''}<span class="lu">↓ ${esc(fmtBytes(h.rxTong))} ↑ ${esc(fmtBytes(h.txTong))}</span></div>`).join('')}`;
+  } else if (sub === 'wan') {
+    if (!wan) {
+      noiDung = `<div class="phu">${esc(t.noWan)}</div>`;
+    } else {
+      noiDung = `<div class="wan-khoi">
+        <div class="wan-tieu">${chamTrangThai(wan.running)}<b>${esc(cfg.isp_name || wan.comment || t.internet)}</b><span class="phu">${esc(wan.name)}</span></div>
+        <div class="wan-luoi">
+          ${kv(t.isp, cfg.isp_name || wan.comment)}
+          ${kv(t.cong, wan.name)}
+          ${kv(t.kieu, wan.type)}
+          ${kv(t.ipAddr, wan.ip)}
+          ${kv(t.mtuLbl, wan.mtu)}
+          ${kv(t.lastUpLbl, wan.lastUp)}
+          ${kv(t.linkDowns, wan.linkDowns)}
+          ${kv(t.nowRate, `↓ ${fmtRate(wan.rx)} ↑ ${fmtRate(wan.tx)}`)}
+          ${kv(t.totalTx, `↓ ${fmtBytes(wan.rxTong)} ↑ ${fmtBytes(wan.txTong)}`)}
+        </div>
+        ${wanCong ? `<div class="tieu-nhom">${esc(t.cong)} ${esc(wanCong.name)}</div>${chiTietCong(wanCong)}` : ''}
+      </div>`;
+    }
+  } else {
+    // Bridge LAN: chọn các cổng ether nằm trong bridge (mặc định: mọi cổng nội bộ, trừ WAN).
+    const macDinh = ports.map((g) => g.name);
+    const thanhVien = Array.isArray(ui.bridge) ? ui.bridge : (Array.isArray(cfg.bridge_ports) ? cfg.bridge_ports : macDinh);
+    const cong = ports.filter((g) => thanhVien.includes(g.name));
+    const br = bridges[0];
+    noiDung = `<div class="bridge-khoi" data-members="${esc(thanhVien.join(','))}">
+      <div class="wan-tieu">${chamTrangThai(br ? br.running : null)}<b>${esc(br ? br.name : 'Bridge')}</b><span class="phu">${esc(br && br.comment ? br.comment : '')}</span></div>
+      <p class="phu">${esc(t.bridgeNote)}</p>
+      <div class="tieu-nhom">${esc(t.chonCong)}</div>
+      <div class="cong-chon">${ports.map((g) => `<label class="chon-cong"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}> ${esc(g.name)} ${g.label && g.label !== g.name ? `<span class="phu">${esc(g.label)}</span>` : ''}</label>`).join('') || `<span class="phu">${esc(t.chuaCo)}</span>`}</div>
+      <div class="tieu-nhom">${esc(t.ports)} (${esc(cong.length)})</div>
+      ${cong.map((g) => `<div class="cong-the">${dong(g)}${chiTietCong(g)}</div>`).join('') || `<div class="phu">${esc(t.none)}</div>`}
+    </div>`;
+  }
+
+  return `<ha-card class="may-the">
+    <div class="dau"><div class="td">${esc(cfg.title || t.title)}</div></div>
+    ${tabBar(t, ui)}
+    ${thanhCon}
+    <div class="the-may">${noiDung}</div>
+  </ha-card>`;
+}
+
 export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const t = CHU[cfg.language === 'en' ? 'en' : 'vi'];
   const tieuDe = cfg.title || t.title;
   const tenRouter = cfg.router_name || t.router;
   const { core, wan, ports, bridges, ppp, tunnels, clients } = model;
   const coDuLieu = !!(wan || ports.length || bridges.length || tunnels.length || clients.length || core.cpu != null);
+  if (ui.tab === 'mikrotik') return renderRouterCard(model, cfg, ui, now);
   if (!coDuLieu) return `<ha-card><div class="vo">${esc(t.none)}</div></ha-card>`;
 
   const tong = wan ? { rx: wan.rx, tx: wan.tx } : ports.reduce((s, p) => ({ rx: s.rx + p.rx, tx: s.tx + p.tx }), { rx: 0, tx: 0 });
@@ -535,6 +639,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
       <div class="chip">${esc(online)}/${esc(clients.length)} ${esc(t.online)}</div>
       ${cfg.show_clients === false ? '' : `<button class="chip nut-sua" data-act="sua" aria-pressed="${ui.edit ? 'true' : 'false'}" title="${esc(t.edit)}" aria-label="${esc(t.edit)}">✎</button>`}</div>
     ${bang}
+    ${tabBar(t, ui)}
     <div class="cay">
       <svg class="duong" aria-hidden="true"></svg>
       <div class="cot cot-isp">
@@ -614,6 +719,24 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .sua label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--secondary-text-color)}
 .sua label.ngang{flex-direction:row;align-items:center;gap:8px}
 .hang-nut{display:flex;gap:8px}
+.may-the .the-may{min-height:620px}
+.tab-con-hang{display:flex;gap:6px;padding:0 12px 10px;flex-wrap:wrap}
+.tab-con{padding:5px 12px;border-radius:12px;border:1px solid var(--divider-color,#555);background:transparent;color:var(--secondary-text-color);cursor:pointer;font:inherit;font-size:.9rem}
+.tab-con.on{color:var(--primary-color,#03a9f4);border-color:var(--primary-color,#03a9f4)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed var(--divider-color,#444);font-size:.92rem}
+.kv span{color:var(--secondary-text-color)}
+.wan-khoi,.bridge-khoi{display:flex;flex-direction:column;gap:6px}
+.wan-tieu{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:1.05rem}
+.wan-luoi{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 18px}
+.cong-chon{display:flex;flex-wrap:wrap;gap:8px 14px}
+.chon-cong{display:flex;gap:6px;align-items:center;padding:4px 8px;border:1px solid var(--divider-color,#444);border-radius:10px}
+.cong-the{margin-bottom:8px}
+.cong-chi-tiet{margin:0 0 4px 26px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0 18px}
+.tabs-the{display:flex;gap:6px;padding:4px 12px 8px}
+.tab-the{padding:6px 12px;border-radius:14px;border:1px solid var(--divider-color,#555);background:transparent;color:var(--secondary-text-color);cursor:pointer;font:inherit}
+.tab-the.on{color:var(--primary-color,#03a9f4);border-color:var(--primary-color,#03a9f4)}
+.hang-chip{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+.chi-tiet{margin:-2px 0 6px 26px;font-size:.85rem}
 .vpn-khoi{margin:4px 0 8px 10px;padding-left:8px;border-left:2px solid var(--divider-color,#555)}
 .vpn-khoi.ra{border-left-style:dashed}
 .vpn-cong .ten{font-weight:600}
@@ -645,7 +768,8 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       try {
         const luu = JSON.parse(localStorage.getItem(this._khoaLuu) || '{}') || {};
         this._ui.nodes = lamSachNutNguoiDung(luu.nodes); this._ui.gan = lamSachGan(luu.gan);
-      } catch (e) { this._ui.nodes = []; this._ui.gan = {}; }
+        this._ui.bridge = lamSachCong(luu.bridge);
+      } catch (e) { this._ui.nodes = []; this._ui.gan = {}; this._ui.bridge = null; }
       this._chuKy = '';
       this._ve(true);
     }
@@ -668,7 +792,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         const r = await this._hass.callWS({ type: 'frontend/get_user_data', key: this._khoaLuu });
         const v = r && r.value;
         if (v && typeof v === 'object') {
-          this._ui.nodes = lamSachNutNguoiDung(v.nodes); this._ui.gan = lamSachGan(v.gan);
+          this._ui.nodes = lamSachNutNguoiDung(v.nodes); this._ui.gan = lamSachGan(v.gan); this._ui.bridge = lamSachCong(v.bridge);
           try { localStorage.setItem(this._khoaLuu, JSON.stringify({ nodes: this._ui.nodes, gan: this._ui.gan })); } catch (e) { /* bỏ qua */ }
           this._ve(true);
         }
@@ -676,7 +800,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
     }
 
     _luu() {
-      const goi = { nodes: this._ui.nodes, gan: this._ui.gan };
+      const goi = { nodes: this._ui.nodes, gan: this._ui.gan, bridge: this._ui.bridge || null };
       try { localStorage.setItem(this._khoaLuu, JSON.stringify(goi)); } catch (e) { /* bỏ qua */ }
       if (this._hass && typeof this._hass.callWS === 'function') {
         this._hass.callWS({ type: 'frontend/set_user_data', key: this._khoaLuu, value: goi }).catch(() => { /* chỉ ghi được trên trình duyệt này */ });
@@ -737,6 +861,15 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
           this._luu(); this._ve(true);
         });
       }
+      r.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._ui.tab = b.dataset.tab; this._ve(true); }));
+      r.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { this._ui.sub = b.dataset.sub; this._ve(true); }));
+      r.querySelectorAll('[data-port]').forEach((c) => c.addEventListener('change', () => {
+        const hien = new Set(String((r.querySelector('.bridge-khoi') || {}).dataset ? r.querySelector('.bridge-khoi').dataset.members : '').split(',').filter(Boolean));
+        if (c.checked) hien.add(c.dataset.port); else hien.delete(c.dataset.port);
+        this._ui.bridge = [...hien];
+        this._luu();
+        this._ve(true);
+      }));
       r.querySelectorAll('[data-act="xoa-nut"]').forEach((b) => b.addEventListener('click', () => {
         const key = b.dataset.key; const id = String(key).replace(/^u-/, '');
         // nút cha bị xoá → nút con mất cha (không treo); gán tay vào nút đã xoá bị bỏ

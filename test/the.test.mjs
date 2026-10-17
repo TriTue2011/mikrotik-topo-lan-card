@@ -358,3 +358,44 @@ test('cổng có data-name là tên RouterOS (ether2 của thực thể ether1),
   assert.match(html, /data-name="ether2"/);
   assert.match(html, /data-name="ether3"/);
 });
+
+test('tab MikroTik gom thông tin hộp router: CPU, WAN (IP, tổng GB), Bridge, từng cổng (trạng thái, MTU), VPN; có thanh chuyển tab', () => {
+  const st = {
+    'sensor.mikrotik_router_core_cpu_load': { state: '3', attributes: {} },
+    'sensor.mikrotik_router_core_memory_usage': { state: '14', attributes: {} },
+    'switch.mikrotik_router_ppp_pppoe_out1_port': { state: 'on', attributes: { name: 'pppoe-out1', type: 'pppoe-out', running: true, comment: 'FPT PPPoE', status: 'link-ok', actual_mtu: 1492, link_downs: 0 } },
+    'sensor.mikrotik_router_ppp_pppoe_out1_rx': { state: '94', attributes: { unit_of_measurement: 'kB/s' } },
+    'sensor.mikrotik_router_ppp_pppoe_out1_tx': { state: '75', attributes: { unit_of_measurement: 'kB/s' } },
+    'sensor.mikrotik_router_ppp_pppoe_out1_rx_total': { state: '229.9', attributes: { unit_of_measurement: 'GB' } },
+    'sensor.mikrotik_router_ppp_pppoe_out1_ip_address': { state: '1.52.139.243', attributes: {} },
+    'switch.mikrotik_router_port_ether2_port': { state: 'on', attributes: { name: 'ether3', type: 'ether', running: true, status: 'link-ok', actual_mtu: 1500, link_downs: 0, comment: '' } },
+  };
+  const m = discover(st, {});
+  assert.equal(m.wan.ip, '1.52.139.243');
+  assert.equal(m.wan.rxTong, 229.9e9);
+  const html = renderHtml(m, {}, { tab: 'mikrotik', sub: 'tong-quan', states: st, gan: {}, nodes: [] });
+  assert.match(html, /class="tab-the on" data-tab="mikrotik"/);
+  assert.match(html, /CPU 3%/);
+  const wan = renderHtml(m, {}, { tab: 'mikrotik', sub: 'wan', states: st, gan: {}, nodes: [] });
+  assert.match(wan, /1\.52\.139\.243/);
+  assert.match(wan, /<span>MTU<\/span><b>1492<\/b>/);
+  const mac = renderHtml(m, {}, { tab: 'so-do', states: st, gan: {}, nodes: [] });
+  assert.match(mac, /class="tab-the on" data-tab="so-do"/);
+});
+
+test('tab Bridge LAN: mặc định mọi cổng nội bộ (không WAN) nằm trong bridge; chọn cổng được lưu; cổng không chọn không nằm trong bridge', () => {
+  const st = {
+    'switch.mikrotik_router_port_ether1_port': { state: 'on', attributes: { name: 'ether2', type: 'ether', running: true, status: 'link-ok', actual_mtu: 1500, link_downs: 0 } },
+    'switch.mikrotik_router_port_ether2_port': { state: 'on', attributes: { name: 'ether3', type: 'ether', running: true, status: 'link-ok', actual_mtu: 1500, link_downs: 0 } },
+    'switch.mikrotik_router_port_ether3_port': { state: 'off', attributes: { name: 'ether4', type: 'ether', running: false, status: 'no-link', actual_mtu: 1500, link_downs: 0 } },
+    'switch.mikrotik_router_port_ether4_port': { state: 'on', attributes: { name: 'WAN-ETHER1', type: 'ether', running: true, status: 'link-ok', actual_mtu: 1500, link_downs: 0 } },
+  };
+  const m = discover(st, {});
+  const macDinh = renderHtml(m, {}, { tab: 'mikrotik', sub: 'bridge', states: st, gan: {}, nodes: [] });
+  assert.match(macDinh, /data-port="ether2"[^>]*checked/);
+  assert.match(macDinh, /data-port="ether3"[^>]*checked/);
+  assert.doesNotMatch(macDinh, /data-port="WAN-ETHER1"[^>]*checked/, 'WAN không nằm trong bridge mặc định');
+  const boChon = renderHtml(m, {}, { tab: 'mikrotik', sub: 'bridge', bridge: ['ether2'], states: st, gan: {}, nodes: [] });
+  assert.match(boChon, /data-port="ether2"[^>]*checked/);
+  assert.doesNotMatch(boChon, /data-port="ether3"[^>]*checked/);
+});
