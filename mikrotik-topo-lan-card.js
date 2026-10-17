@@ -505,6 +505,30 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
       ${(ui.nodes || []).length ? '' : `<div class="phu">${esc(t.empty)}</div>`}
     </div>` : '';
 
+  // ── Bố cục cây (đúng sơ đồ): Router → cổng → switch/bộ phát → thiết bị ──
+  const chuanCong = (x) => String(x || '').toLowerCase().replace(/\s+/g, '_').replace(/["\\]/g, '');
+  const hienMay = cfg.show_clients !== false;
+  // Nút switch/bộ phát: tên, số máy, máy của nó, rồi các nút con (ví dụ bộ phát WiFi nối dưới switch).
+  const nutCon = (n) => {
+    const g = nhomHien.find((x) => x.node && x.node.key === n.key);
+    const hien = g && hienMay ? g.hien : [];
+    const sl = g ? g.clients.length : 0;
+    const con = nut.filter((x) => x.parent === n.key);
+    return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}" data-anchor="n-${esc(n.key)}" data-luu="0">
+      <div class="tieu-nhom nhom-may">${n.kind === KIND_AP ? chamTrangThai(n.online) : ''}${n.kind === KIND_AP ? '📶 ' : '⇄ '}${esc(n.name)} (${esc(sl)})${n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : ''}</div>
+      ${hien.map(hangMay).join('')}
+      ${con.map(nutCon).join('')}
+    </div>`;
+  };
+  // Một nhánh = một cổng MikroTik, bên phải là các nút cắm vào cổng đó.
+  const nhanhCong = (pt) => {
+    const con = nut.filter((n) => !n.parent && chuanCong(n.port) === chuanCong(pt.name));
+    return `<div class="nhanh">${hangCong(pt)}<div class="con">${con.map(nutCon).join('')}</div></div>`;
+  };
+  const chuaGan = nhomHien.filter((g) => !g.node && g.hien.length);
+  // Nút gắn vào một cổng không hiện trên card (hoặc chưa khai cổng): vẫn hiện ở cuối, không mất.
+  const mocCon = nut.filter((n) => !n.parent && !ports.some((pt) => chuanCong(n.port) === chuanCong(pt.name)));
+
   return `<ha-card>
     <div class="dau"><div class="td">${esc(tieuDe)}</div>
       <div class="chip"><b>↓</b>${esc(fmtRate(tong.rx))}</div><div class="chip"><b>↑</b>${esc(fmtRate(tong.tx))}</div>
@@ -525,18 +549,19 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
           <div class="phu">${core.cpu != null ? `${esc(t.cpu)} ${esc(core.cpu)}%` : ''} ${core.ram != null ? `· ${esc(t.ram)} ${esc(core.ram)}%` : ''}</div>
           <div class="phu">${core.uptime ? `${esc(t.uptime)} ${esc(fmtUptime(core.uptime, now))}` : ''} ${core.version ? `· RouterOS ${esc(core.version)}` : ''}</div>
         </div>
-      </div>
-      <div class="cot cot-cong">
-        <div class="tieu-nhom">${esc(t.ports)}</div>
-        ${[...bridges, ...ports, ...ppp].map((g) => hangCong(g)).join('')}
+        <div class="tieu-nhom">${esc(t.ports)} · LAN</div>
+        ${[...bridges, ...ppp].map((g) => hangCong(g)).join('')}
         ${vpnHtml}
       </div>
-      ${cfg.show_clients === false ? '' : `<div class="cot cot-may">
+      <div class="cot cot-cong">
         <div class="tieu-nhom">${esc(t.clients)} (${esc(ds.length)})</div>
         <input class="tim" type="search" placeholder="${esc(t.search)}" value="${esc(ui.search || '')}" aria-label="${esc(t.search)}">
-        ${nhomHien.length ? nhomHien.map((g) => `${tieuDeNhom(g)}${g.hien.map(hangMay).join('')}`).join('') : `<div class="phu">${esc(t.noClients)}</div>`}
+        ${ports.map(nhanhCong).join('')}
+        ${mocCon.length ? `<div class="nhanh"><div class="phu">${esc(t.ports)}</div><div class="con">${mocCon.map(nutCon).join('')}</div></div>` : ''}
+        ${chuaGan.length ? `<div class="nhanh"><div class="phu">LAN (${esc(chuaGan.reduce((x, g) => x + g.clients.length, 0))})</div><div class="con">${chuaGan.map((g) => g.hien.map(hangMay).join('')).join('')}</div></div>` : ''}
+        ${!ports.length && !chuaGan.length && !mocCon.length ? `<div class="phu">${esc(t.noClients)}</div>` : ''}
         ${nutXemThem}
-      </div>`}
+      </div>
     </div>
   </ha-card>`;
 }
@@ -551,7 +576,12 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .nut-sua{cursor:pointer}
 .nut-sua[aria-pressed="true"]{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
 .chip b,.lu b{color:var(--primary-color);margin-right:3px}
-.cay{position:relative;display:grid;grid-template-columns:minmax(120px,0.9fr) minmax(150px,1fr) minmax(220px,1.6fr) minmax(220px,1.6fr);gap:28px;align-items:start}
+.cay{position:relative;display:grid;grid-template-columns:minmax(120px,0.8fr) minmax(170px,1fr) minmax(0,3fr);gap:24px;align-items:start}
+.nhanh{display:grid;grid-template-columns:minmax(240px,1fr) minmax(0,2fr);gap:14px;align-items:start;margin-bottom:10px}
+.nhanh>.con{display:flex;flex-direction:column;gap:8px}
+.nut-con{border:1px solid var(--divider-color,#444);border-radius:12px;padding:8px 10px}
+.nut-con .nut-con{margin:8px 0 0 12px}
+.nut-con .nhom-may{margin:0 0 6px}
 .duong{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
 .duong path{fill:none;stroke:var(--primary-color,#03a9f4);stroke-linecap:round;opacity:.55}
 .duong path.chay{stroke-dasharray:6 8;animation:chay linear infinite}
