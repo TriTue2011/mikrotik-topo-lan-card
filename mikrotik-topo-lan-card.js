@@ -214,7 +214,8 @@ export function thietBiTuCamBien(sensorId, states) {
   return ds.filter((c) => c && typeof c === 'object' && /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(String(c.mac || '')))
     .slice(0, 500)
     .map((c) => ({ mac: macChuan(c.mac), band: String(c.band || '').slice(0, 8), rssi: Number.isFinite(Number(c.rssi)) && c.rssi !== null ? Number(c.rssi) : null,
-      mode: String(c.mode || '').slice(0, 16) }));
+      mode: String(c.mode || '').slice(0, 16),
+      rxRate: Number.isFinite(Number(c.rx_rate)) ? Number(c.rx_rate) : null, txRate: Number.isFinite(Number(c.tx_rate)) ? Number(c.tx_rate) : null }));
 }
 
 /** {mac: {band, rssi, mode}} của mọi bộ phát khai `clients_sensor` — để hiện băng tần và tín hiệu cạnh thiết bị. */
@@ -222,7 +223,7 @@ export function thongTinWifi(cfg = {}, states = {}) {
   const ra = {};
   for (const a of cfg.access_points || []) {
     if (!a || !a.clients_sensor) continue;
-    for (const c of thietBiTuCamBien(a.clients_sensor, states)) ra[c.mac] = { band: c.band, rssi: c.rssi, mode: c.mode };
+    for (const c of thietBiTuCamBien(a.clients_sensor, states)) ra[c.mac] = { band: c.band, rssi: c.rssi, mode: c.mode, rxRate: c.rxRate, txRate: c.txRate };
   }
   return ra;
 }
@@ -419,12 +420,13 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const chipWifi = (c) => {
     const w = wifi[macChuan(c.mac)];
     if (!w) return '';
-    const nhan = [w.band, w.rssi != null ? `${w.rssi} dBm` : ''].filter(Boolean).join(' · ');
-    return nhan ? `<span class="goi" title="${esc(w.mode)}">${esc(nhan)}</span>` : '';
+    const nhan = [w.band, w.rssi != null ? `${w.rssi} dBm` : '', w.mode].filter(Boolean).join(' · ');
+    const toc = [w.rxRate != null ? `↓ ${fmtRate(w.rxRate)}` : '', w.txRate != null ? `↑ ${fmtRate(w.txRate)}` : ''].filter(Boolean).join(' ');
+    return nhan || toc ? `<span class="goi" title="${esc(w.mode)}">${esc([nhan, toc].filter(Boolean).join(' · '))}</span>` : '';
   };
   const hangMay = (c) => `
     <div class="hang may ${c.online ? '' : 'off'}" title="${esc(c.mac)} · ${esc(c.interface)} · ${esc(c.source)}">
-      ${chamTrangThai(c.online)}<span class="ten">${esc(c.name)}</span>${chipWifi(c)}${c.interface && !/bridge/i.test(c.interface) ? `<span class="goi" title="MikroTik">${esc(c.interface)}</span>` : ''}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.ip)}</span>${nutGan(c)}
+      ${chamTrangThai(c.online)}<span class="ten">${esc(c.name)}</span>${chipWifi(c)}${c.interface && !/bridge/i.test(c.interface) ? `<span class="goi" title="MikroTik">${esc(c.interface)}</span>` : ''}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.mac)}</span><span class="lu">${esc(c.ip)}</span>${nutGan(c)}
     </div>`;
   const tieuDeNhom = (g) => {
     const n = g.node;

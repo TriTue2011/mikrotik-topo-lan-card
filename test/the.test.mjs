@@ -195,7 +195,7 @@ test('bộ phát tự báo danh sách máy WiFi (clients_sensor): vào nhóm b�
   assert.deepEqual(theo['LAN'], ['Máy khác']);
   assert.equal(thietBiTuCamBien('sensor.zte_clients', st).length, 2, 'phần tử sai khuôn bị bỏ');
   assert.equal(thietBiTuCamBien('sensor.zte_clients', st)[1].rssi, null, 'tín hiệu hỏng → null, không bịa');
-  assert.deepEqual(thongTinWifi(cfg, st)['02:00:00:00:00:08'], { band: '5G', rssi: -65, mode: '802.11ac' });
+  assert.deepEqual(thongTinWifi(cfg, st)['02:00:00:00:00:08'], { band: '5G', rssi: -65, mode: '802.11ac', rxRate: null, txRate: null });
   const html = renderHtml(discover(states, {}), cfg, { states: { ...states, ...st }, gan: {}, nodes: [] });
   assert.match(html, /ZTE WiFi \(/);
   const html2 = renderHtml({ ...discover(states, {}), clients: cs }, cfg, { states: st, gan: {}, nodes: [] });
@@ -277,4 +277,16 @@ test('dòng máy hiện cổng MikroTik nó đang nối (ether3…), không hi�
   const html = renderHtml(discover(st, {}), {}, { states: st, gan: {}, nodes: [] });
   assert.match(html, /title="MikroTik">ether3</);
   assert.doesNotMatch(html, /title="MikroTik">BridgeLAN</);
+});
+
+test('dòng máy WiFi hiện MAC, băng tần, RSSI, chế độ và tốc độ RX/TX từ bộ phát ZTE', () => {
+  const cam = 'sensor.zte_router_172_16_10_24_connected_devices';
+  const st = { [cam]: { state: '1', attributes: { clients: [{ mac: '02:00:00:00:00:31', band: '5G', rssi: -61, mode: '802.11ax', rx_rate: 1200000, tx_rate: 800000 }] } },
+    'device_tracker.may_zte': { state: 'home', attributes: { attribution: 'Data provided by Mikrotik', mac: '02:00:00:00:00:31', ip: '172.16.10.31', host_name: 'May ZTE', interface: 'BridgeLAN', source: 'dhcp' } } };
+  const cfg = { access_points: [{ name: 'ZTE WiFi', port: 'ether2', clients_sensor: cam }] };
+  const m = discover(st, cfg);
+  m.clients = [{ mac: '02:00:00:00:00:31', ip: '172.16.10.31', name: 'May ZTE', interface: 'BridgeLAN', source: 'dhcp', online: true }];
+  const html = renderHtml(m, cfg, { states: st, gan: {}, nodes: [] });
+  assert.match(html, /02:00:00:00:00:31/);
+  assert.match(html, /5G · -61 dBm · 802\.11ax · ↓ 1\.20 Mbps ↑ 800 kbps/);
 });
