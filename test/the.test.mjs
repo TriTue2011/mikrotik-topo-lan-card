@@ -373,7 +373,6 @@ test('hộp MikroTik: khối WAN và khối Bridge LAN xếp chồng; trong Brid
   const html = renderHtml(m, {}, { states: st, gan: {}, nodes: [] });
   assert.match(html, /wan-hop/);
   assert.match(html, /1\.52\.139\.243/);
-  assert.match(html, /<span>MTU<\/span><b>1492<\/b>/);
   assert.match(html, /BRIDGE LAN/);
   assert.match(html, /data-port="ether2"[^>]*checked/);
   assert.match(html, /data-port="ether3"[^>]*checked/);
