@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.8.0';
+export const VERSION = '0.8.1';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -396,7 +396,7 @@ export function layNguon(cfg = {}, states = {}) {
       theoHop.get(hop).push(c);
     }
     for (const [hop, ds] of theoHop) {
-      ket.push({ node: hop, devices: ds.map((c) => chuanHoaThietBi({ mac: c.mac, ip: c.ip, name: c.name, band: c.band, rssi: c.rssi, mode: c.mode })).filter(Boolean) });
+      ket.push({ node: hop, devices: ds.map((c) => chuanHoaThietBi({ mac: c.mac, ip: c.ip, name: c.name, band: c.band, rssi: c.rssi, mode: c.mode, rx: c.rx_bps, tx: c.tx_bps })).filter(Boolean) });
     }
   }
   return ket;

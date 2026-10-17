@@ -60,6 +60,20 @@ test('layNguon đặt từng máy vào hộp của cha nó, kèm thông tin WiFi
   assert.ok(!Object.values(g).flat().some((d) => d.mac === 'aa:00:00:00:00:77'));   // cha là router: không ép vào hộp nào
 });
 
+test('tốc độ từng máy (rx_bps/tx_bps bit/giây) từ cây vào thông tin thiết bị', () => {
+  const cay = { nodes: CAY.nodes, clients: [{ mac: 'AA:00:00:00:00:01', ip: '172.16.10.50', name: 'Máy in', parent: 'ether2', rx_bps: 5500000, tx_bps: 250000 }] };
+  const st = { 'sensor.mik_cay_thiet_bi': { state: '1', attributes: cay } };
+  const d = layNguon(autoCauHinh(st, cfg0), st).find((g) => g.node === 'ether2').devices[0];
+  assert.equal(d.rxRate, 5500000);
+  assert.equal(d.txRate, 250000);
+});
+
+test('máy chưa có số đo (rx_bps null) thì không bịa tốc độ', () => {
+  const d = layNguon(autoCauHinh(states, cfg0), states).find((g) => g.node === 'ether2').devices[0];
+  assert.ok(d.rxRate == null || d.rxRate === 0 || Number.isNaN(d.rxRate) === false);
+  assert.ok(!(d.rxRate > 0));
+});
+
 test('máy mới trong cây tự có mặt trong hộp (thietBiNguonThieu), không cần device_tracker hay khai tay', () => {
   const c = autoCauHinh(states, cfg0);
   const them = thietBiNguonThieu(c, states, []);

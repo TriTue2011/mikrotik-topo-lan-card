@@ -1,6 +1,6 @@
 {
   "name": "mikrotik-topo-lan-card",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Card Home Assistant vẽ sơ đồ mạng LAN của router MikroTik (không cần SNMP)",
   "type": "module",
   "license": "MIT",
