@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -144,6 +144,30 @@ export function macTuCamBien(sensorId, thuocTinh, states) {
   return Array.isArray(ds) ? ds.filter((m) => typeof m === 'string') : [];
 }
 
+/**
+ * Danh sách thiết bị WiFi do BỘ PHÁT tự báo, đặt ở thuộc tính `clients` của một cảm biến (xem tools/zte_e2633.py):
+ * [{mac, band: '2.4G'|'5G', rssi, mode, name, ip}]. Phần tử sai khuôn bị bỏ; không có/hỏng → rỗng.
+ */
+export function thietBiTuCamBien(sensorId, states) {
+  const cb = sensorId && states ? states[sensorId] : null;
+  const ds = cb && cb.attributes ? cb.attributes.clients : null;
+  if (!Array.isArray(ds)) return [];
+  return ds.filter((c) => c && typeof c === 'object' && /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(String(c.mac || '')))
+    .slice(0, 500)
+    .map((c) => ({ mac: macChuan(c.mac), band: String(c.band || '').slice(0, 8), rssi: Number.isFinite(Number(c.rssi)) && c.rssi !== null ? Number(c.rssi) : null,
+      mode: String(c.mode || '').slice(0, 16) }));
+}
+
+/** {mac: {band, rssi, mode}} của mọi bộ phát khai `clients_sensor` — để hiện băng tần và tín hiệu cạnh thiết bị. */
+export function thongTinWifi(cfg = {}, states = {}) {
+  const ra = {};
+  for (const a of cfg.access_points || []) {
+    if (!a || !a.clients_sensor) continue;
+    for (const c of thietBiTuCamBien(a.clients_sensor, states)) ra[c.mac] = { band: c.band, rssi: c.rssi, mode: c.mode };
+  }
+  return ra;
+}
+
 export const KIND_SWITCH = 'switch';
 export const KIND_AP = 'ap';
 
@@ -163,7 +187,8 @@ export function dungNut(cfg = {}, userNodes = []) {
     if (!a) return;
     const cha = a.switch ? (nut.find((n) => n.kind === KIND_SWITCH && n.name === a.switch) || {}).key || '' : '';
     nut.push({ key: `ap-${i}`, kind: KIND_AP, name: a.name || `WiFi ${i + 1}`, port: cha ? '' : (a.port || ''), parent: cha,
-      macs: (a.macs || []).map(macChuan), ips: a.ips || [], entity: a.entity || '', tuDong: !!a.auto_private_mac, nguon: 'cfg', macSensor: a.mac_sensor || '' });
+      macs: (a.macs || []).map(macChuan), ips: a.ips || [], entity: a.entity || '', tuDong: !!a.auto_private_mac, nguon: 'cfg', macSensor: a.mac_sensor || '',
+      clientsSensor: a.clients_sensor || '' });
   });
   (userNodes || []).forEach((u) => {
     if (!u || typeof u.id !== 'string' || !/^[a-z0-9_-]{1,40}$/.test(u.id)) return;
@@ -187,6 +212,8 @@ export function phanNhom(clients, cfg = {}, gan = {}, states = {}, userNodes = [
   const nut = dungNut(cfg, userNodes).map((n) => ({
     ...n, clients: [], online: n.entity && states[n.entity] ? states[n.entity].state === 'home' : null
   }));
+  // Bộ phát tự báo danh sách máy WiFi của nó: đó là khai báo RÕ (chính xác hơn mọi suy đoán theo cổng).
+  for (const n of nut) if (n.clientsSensor) n.macs = [...n.macs, ...thietBiTuCamBien(n.clientsSensor, states).map((c) => c.mac)];
   const theoKey = new Map(nut.map((n) => [n.key, n]));
   const macCong = (cong) => (cfg.mac_sensor ? macTuCamBien(cfg.mac_sensor, cong, states) : []).map(macChuan);
   for (const n of nut) {
@@ -323,9 +350,16 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     const nhan = dich ? `${t.assign} ${dich.name}` : t.unassign;
     return `<button class="gan" data-act="gan" data-mac="${esc(mac)}" title="${esc(nhan)}" aria-label="${esc(nhan)}">📶</button>`;
   };
+  const wifi = thongTinWifi(cfg, ui.states || {});
+  const chipWifi = (c) => {
+    const w = wifi[macChuan(c.mac)];
+    if (!w) return '';
+    const nhan = [w.band, w.rssi != null ? `${w.rssi} dBm` : ''].filter(Boolean).join(' · ');
+    return nhan ? `<span class="goi" title="${esc(w.mode)}">${esc(nhan)}</span>` : '';
+  };
   const hangMay = (c) => `
     <div class="hang may ${c.online ? '' : 'off'}" title="${esc(c.mac)} · ${esc(c.interface)} · ${esc(c.source)}">
-      ${chamTrangThai(c.online)}<span class="ten">${esc(c.name)}</span>${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.ip)}</span>${nutGan(c)}
+      ${chamTrangThai(c.online)}<span class="ten">${esc(c.name)}</span>${chipWifi(c)}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.ip)}</span>${nutGan(c)}
     </div>`;
   const tieuDeNhom = (g) => {
     const n = g.node;
@@ -507,7 +541,8 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       const chuKy = JSON.stringify([model, this._ui.search, this._ui.limit, this._cfg.language, this._ui.gan, this._ui.nodes, this._ui.edit,
         (this._cfg.access_points || []).map((a) => (a && a.entity && this._hass.states[a.entity] ? this._hass.states[a.entity].state : '')),
         [this._cfg, ...(this._cfg.switches || []), ...(this._cfg.access_points || [])]
-          .map((x) => (x && x.mac_sensor && this._hass.states[x.mac_sensor] ? JSON.stringify(this._hass.states[x.mac_sensor].attributes) : ''))]);
+          .map((x) => (x && x.mac_sensor && this._hass.states[x.mac_sensor] ? JSON.stringify(this._hass.states[x.mac_sensor].attributes) : '')),
+        (this._cfg.access_points || []).map((x) => (x && x.clients_sensor && this._hass.states[x.clients_sensor] ? JSON.stringify(this._hass.states[x.clients_sensor].attributes) : ''))]);
       if (!ep && chuKy === this._chuKy) return;
       this._chuKy = chuKy;
       const dangTim = this.shadowRoot.activeElement && this.shadowRoot.activeElement.classList.contains('tim');

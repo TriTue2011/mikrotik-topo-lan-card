@@ -1,5 +1,9 @@
 # Lịch sử thay đổi
 
+## 0.3.0
+- `access_points[].clients_sensor`: bộ phát tự báo danh sách máy WiFi (MAC, băng tần, tín hiệu); máy trong danh sách tự vào nhóm bộ phát, hiện `5G · -65 dBm`.
+- `tools/zte_e2633.py`: phân tích dữ liệu `GetALLClients`/`GetALLAP` của ZTE E2633 (chỉ đọc tệp, không đăng nhập).
+
 ## 0.2.0
 - **Người dùng tự thêm switch / bộ phát WiFi ngay trên card** (nút ✎): chọn nơi cắm (cổng MikroTik hoặc nút khác), gán thiết bị bằng nút 📶, lưu theo người dùng Home Assistant. Hỗ trợ nhiều switch nối tiếp.
 - Khai báo sẵn bằng YAML: `switches`, `access_points[].switch`, `mac_sensor` toàn cục.

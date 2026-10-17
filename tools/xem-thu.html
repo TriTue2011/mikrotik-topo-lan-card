@@ -14,11 +14,16 @@ const states = Object.fromEntries(ds.map((s) => [s.entity_id, { state: s.state, 
 // Mô phỏng cảm biến «MAC theo cổng»: 12 thiết bị đầu tiên nằm sau cổng ether2 (nơi cắm bộ phát WiFi).
 const macs = ds.filter((s) => s.entity_id.startsWith('device_tracker.')).map((s) => s.attributes.mac);
 states['sensor.mikrotik_bang_mac'] = { state: '2', attributes: { ether2: macs.slice(0, 12), ether3: macs.slice(12, 22) } };
-states['device_tracker.zte_wifi'] = { state: 'home', attributes: {} };
+// Mô phỏng người dùng ĐÃ thêm hai switch và một bộ phát WiFi trên card (lưu ở localStorage như bản thật).
+localStorage.setItem('mikrotik-topo-lan-card:gan:mikrotik_router', '{}');
+localStorage.setItem('mikrotik-topo-lan-card:mikrotik_router', JSON.stringify({ nodes: [
+  { id: 'sw-khach', name: 'Switch phòng khách', kind: 'switch', parent: 'port:ether2' },
+  { id: 'sw-ngu', name: 'Switch phòng ngủ', kind: 'switch', parent: 'port:ether3' },
+  { id: 'zte', name: 'ZTE WiFi', kind: 'ap', parent: 'node:u-sw-khach', tuDong: true }], gan: {} }));
 const card = document.createElement('mikrotik-topo-lan-card');
-card.setConfig({ type: 'custom:mikrotik-topo-lan-card', title: 'Mạng LAN nhà',
-  access_points: [{ name: 'ZTE WiFi', port: 'ether2', entity: 'device_tracker.zte_wifi', mac_sensor: 'sensor.mikrotik_bang_mac' }],
+card.setConfig({ type: 'custom:mikrotik-topo-lan-card', title: 'Mạng LAN nhà', mac_sensor: 'sensor.mikrotik_bang_mac',
   port_names: { ether1: 'Bộ phát WiFi', ether2: 'Switch phòng khách' }, client_limit: 12 });
+if (new URLSearchParams(location.search).get('sua')) card._ui.edit = true;
 document.getElementById('goc').appendChild(card);
 card.hass = { states };
 </script></body></html>

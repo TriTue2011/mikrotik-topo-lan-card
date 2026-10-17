@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam } from '../mikrotik-topo-lan-card.js';
+import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi } from '../mikrotik-topo-lan-card.js';
 
 const mang = JSON.parse(readFileSync(new URL('./fixtures/states.json', import.meta.url), 'utf8'));
 const states = Object.fromEntries(mang.map((s) => [s.entity_id, { state: s.state, attributes: s.attributes }]));
@@ -179,4 +179,24 @@ test('dữ liệu người dùng bị sửa hỏng (localStorage/user data) đư
   assert.ok(!html.includes('<img'), 'tên nút do người dùng nhập không được thành HTML');
   assert.match(html, /data-act="them-nut"/, 'ở chế độ sửa có biểu mẫu thêm nút');
   assert.match(html, /data-act="xoa-nut"/, 'nút do người dùng thêm có nút xoá');
+});
+
+test('bộ phát tự báo danh sách máy WiFi (clients_sensor): vào nhóm bộ phát kèm băng tần và tín hiệu; dữ liệu hỏng không phá', () => {
+  const cs = [may('Điện thoại', '02:00:00:00:00:08', '192.168.88.48'), may('Máy khác', '02:00:00:00:00:77', '192.168.88.77')];
+  const st = { 'sensor.zte_clients': { state: '2', attributes: { clients: [
+    { mac: '02:00:00:00:00:08', band: '5G', rssi: -65, mode: '802.11ac' },
+    { mac: 'khong-phai-mac', band: '2.4G', rssi: -40 }, null, 5, { mac: '02:00:00:00:00:09', band: '2.4G', rssi: 'abc' }] } } };
+  const cfg = { access_points: [{ name: 'ZTE WiFi', port: 'ether2', clients_sensor: 'sensor.zte_clients' }] };
+  const kq = phanNhom(cs, cfg, {}, st);
+  const theo = Object.fromEntries(kq.nhom.map((g) => [g.name, g.clients.map((c) => c.name)]));
+  assert.deepEqual(theo['ZTE WiFi'], ['Điện thoại']);
+  assert.deepEqual(theo['LAN'], ['Máy khác']);
+  assert.equal(thietBiTuCamBien('sensor.zte_clients', st).length, 2, 'phần tử sai khuôn bị bỏ');
+  assert.equal(thietBiTuCamBien('sensor.zte_clients', st)[1].rssi, null, 'tín hiệu hỏng → null, không bịa');
+  assert.deepEqual(thongTinWifi(cfg, st)['02:00:00:00:00:08'], { band: '5G', rssi: -65, mode: '802.11ac' });
+  const html = renderHtml(discover(states, {}), cfg, { states: { ...states, ...st }, gan: {}, nodes: [] });
+  assert.match(html, /ZTE WiFi \(/);
+  const html2 = renderHtml({ ...discover(states, {}), clients: cs }, cfg, { states: st, gan: {}, nodes: [] });
+  assert.match(html2, /5G · -65 dBm/, 'hiện băng tần và tín hiệu cạnh máy');
+  for (const xau of [undefined, {}, { 'sensor.zte_clients': { attributes: { clients: 'x' } } }]) assert.deepEqual(thietBiTuCamBien('sensor.zte_clients', xau), []);
 });

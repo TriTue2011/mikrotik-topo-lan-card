@@ -84,6 +84,21 @@ command_line:
 (`secrets` không tự thay trong chuỗi lệnh: dùng `shell_command`/biến môi trường theo cách bạn quen, hoặc chép mật khẩu vào tệp chỉ root đọc được.) Thêm `--tls --port 8729 --insecure` nếu dùng API-SSL với chứng chỉ tự ký.
 Thuộc tính của cảm biến đặt theo **tên cổng** (`ether2`…) khớp với cổng bạn cho nút cắm vào.
 
+## Bộ phát WiFi tự báo danh sách máy (ZTE E2633)
+Bộ phát biết rõ máy nào đang dùng WiFi, băng tần nào (2.4G/5G) và tín hiệu bao nhiêu dBm — chính xác hơn mọi suy đoán theo cổng.
+Nếu bạn có một cảm biến Home Assistant mang thuộc tính `clients` (danh sách `{mac, band, rssi, mode}`), khai vào bộ phát:
+```yaml
+access_points:
+  - name: ZTE WiFi
+    port: ether2
+    clients_sensor: sensor.zte_wifi          # thuộc tính `clients`
+```
+Các máy trong danh sách đó tự vào nhóm «ZTE WiFi» và hiện kèm `5G · -65 dBm`. Dữ liệu sai khuôn bị bỏ, không bịa.
+`tools/zte_e2633.py` đọc đúng khuôn trả về của trang quản trị ZTE E2633 (`GetALLClients`, `GetALLAP`) — **chỉ phân tích tệp JSON bạn tự lưu**, không đăng nhập hay gọi mạng:
+```bash
+python3 tools/zte_e2633.py clients.json ap.json
+```
+
 ## Về SNMP
 Card **không cần SNMP**. MikroTik có hỗ trợ SNMP, nhưng nhiều bộ phát WiFi do nhà mạng cấp (ví dụ ZTE E2633) **có thể không** cho người dùng bật SNMP; cách gán theo bảng MAC ở trên không phụ thuộc vào nó.
 Nếu vẫn bật SNMP trên MikroTik: đổi tên cộng đồng `public` mặc định, giới hạn `addresses` theo IP của Home Assistant, ưu tiên SNMPv3 khi có thể.
