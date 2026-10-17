@@ -1,0 +1,44 @@
+name: Release
+
+# Đẩy tag vX.Y.Z là tạo Release. Tag phải khớp package.json và VERSION trong card, không khớp thì dừng.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Kiểm tra phiên bản khớp tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          CARD=$(grep -oP "export const VERSION = '\K[^']+" mikrotik-topo-lan-card.js)
+          echo "tag=$TAG package=$PKG card=$CARD"
+          if [ "$TAG" != "$PKG" ] || [ "$TAG" != "$CARD" ]; then
+            echo "Phiên bản không khớp: tag, package.json và VERSION của card phải giống nhau"
+            exit 1
+          fi
+
+      - name: Chạy test
+        run: node --test test/*.test.mjs
+
+      - name: Tạo Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          VER="${TAG#v}"
+          # Ghi chú lấy từ đúng mục của phiên bản trong CHANGELOG.md
+          awk -v v="$VER" '$0 ~ "^## "v"$" {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          gh release create "$TAG" mikrotik-topo-lan-card.js --title "$TAG" --notes-file notes.md

@@ -1,5 +1,15 @@
 # Lịch sử thay đổi
 
+## 0.4.0
+- **Khối VPN tách riêng**: giao diện WireGuard (`mik-hk`, `mik-sg`, `wg-home`) không còn là cổng. Peer `0.0.0.0/0` (surfshark) là đường ra Internet qua VPN, nét đứt; peer còn lại là truy cập từ xa.
+- **Mục WireGuard**: tổng RX/TX theo đơn vị dễ đọc (GB/MB) và thời gian bắt tay gần nhất.
+- **MikroTik Extended**: tự nhận tiền tố từ tên cổng `switch.<tiền_tố>_port_<id>_port`, không cần khai `prefix`; đọc cổng và PPPoE (`_ppp_`); cổng tên WAN không lẫn vào cổng nội bộ.
+- **Dòng máy**: hiện MAC; chip WiFi hiện băng tần, RSSI, chế độ và tốc độ RX/TX của bộ phát ZTE.
+- **Chip cổng**: máy có dây hiện cổng MikroTik nó đang nối (ví dụ `ether3`), bỏ qua `BridgeLAN`.
+- **Bộ phát ZTE tự thêm** khi khai `zte_port` và có cảm biến `…_connected_devices`.
+- **Trình sửa bằng giao diện** (Sửa thẻ): tab Cấu hình và tab Thiết bị (thêm, sửa, xoá switch và bộ phát).
+- **Hướng dẫn** cài MikroTik Extended và tạo tài khoản API trong README.
+
 ## 0.3.0
 - `access_points[].clients_sensor`: bộ phát tự báo danh sách máy WiFi (MAC, băng tần, tín hiệu); máy trong danh sách tự vào nhóm bộ phát, hiện `5G · -65 dBm`.
 - `tools/zte_e2633.py`: phân tích dữ liệu `GetALLClients`/`GetALLAP` của ZTE E2633 (chỉ đọc tệp, không đăng nhập).
