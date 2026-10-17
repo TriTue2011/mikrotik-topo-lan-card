@@ -1,5 +1,9 @@
 # Lịch sử thay đổi
 
+## 0.4.4
+- **Router ZTE tự nằm trong hộp ZTE WiFi**: IP lấy từ thuộc tính `host` của cảm biến chính, không còn hiện trong LAN.
+- **TX/RX của thiết bị WiFi qua ZTE** hiện như cổng (↓ ↑ và thanh), tách khỏi băng tần, RSSI và chế độ.
+
 ## 0.4.3
 - **Nguồn thiết bị trong cài đặt**: tab Thiết bị của trình sửa có ô chọn nguồn cho từng thiết bị, lưu vào `device_sources`. Bỏ ô chọn trên card.
 - `device_sources` được ưu tiên hơn `default_source`.
