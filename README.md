@@ -151,8 +151,11 @@ Với tích hợp [`mikrotik_snmp`](https://github.com/TriTue2011/mikrotik_snmp)
 type: custom:mikrotik-topo-lan-card
 prefix: mikrotik_router
 topo_sensor: sensor.mikrotik_router_cay_thiet_bi
-port_names: { ether2: SW1, ether4: SW2, bridgelan: BRIDGE LAN }   # (tuỳ chọn) đặt tên hộp theo cổng
+switches:                          # (tuỳ chọn) đặt tên hộp bên phải theo cổng; hộp router vẫn giữ tên cổng theo MikroTik
+  - { name: SW1, port: ether2 }
+  - { name: SW2, port: ether3 }
 ```
+`port_names` đổi cả nhãn cổng trong hộp router; muốn giữ nguyên tên cổng theo MikroTik mà chỉ đặt tên hộp bên phải thì dùng `switches` như trên (đổi `ether2`, `ether3` thành cổng thật của anh). Mọi đường nối là **nét đứt**, có chấm ở nguồn: từ đúng hàng cổng (ví dụ `ether2`) trong hộp router tới hộp của nó, từ hộp tới bộ phát ZTE, rồi tới từng máy. Màn hình hẹp (dưới 820 px) chuyển một cột và không vẽ đường nối.
 Card đọc thuộc tính `nodes` và `clients` của cảm biến đó rồi **tự dựng hộp** (mỗi cổng có máy thành một switch, mỗi bộ phát ZTE thành một bộ phát nối vào cổng/switch nó cắm) và
 **đặt từng máy vào hộp của cha nó**; máy WiFi nằm trong hộp ZTE kèm băng tần, tín hiệu, chế độ. **Thiết bị mới trong mạng tự có mặt và tự nối vào đúng hộp**, không cần `device_sources`
 hay `sources`. Hộp bạn đã khai tay (`switches`, `access_points`) được giữ nguyên: card chỉ thêm hộp còn thiếu, không tạo trùng (trùng cổng với switch có `port`, trùng tên hoặc IP với bộ phát).

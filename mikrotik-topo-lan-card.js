@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.8.1';
+export const VERSION = '0.8.2';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -756,6 +756,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const gioiHan = Math.max(5, Number(ui.limit || cfg.client_limit || 30));
   // Gán tay cũ đã lưu trong trình duyệt không còn dùng; nguồn của thiết bị khai bằng device_sources trong cấu hình.
   const { nut, nhom } = phanNhom(ds, cfg, {}, ui.states || {}, ui.nodes || []);
+  ui.nhomVe = { nut, nhom };            // _veDuong vẽ đường nối theo ĐÚNG nhóm này (có cả máy lấy từ cây thiết bị), không tự ghép lại
   let conLai = cfg.show_clients === false ? 0 : gioiHan;
   // Giới hạn số máy hiện: hộp có nguồn riêng (bộ phát WiFi…) được chia chỗ trước, phần còn lại (LAN, switch mặc định) lấy phần dư.
   const uuTien = (g) => (g.node && g.node.kind === KIND_AP ? 0 : 1);
@@ -954,8 +955,9 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .bridge-tieu .ten{font-weight:600}
 .hop-tieu-to{flex-wrap:wrap;text-transform:none;font-size:13px;letter-spacing:0}
 .hop-tieu-to .ten-hop{font-weight:600}
-.duong{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
-.duong path{fill:none;stroke:var(--primary-color,#03a9f4);stroke-linecap:round;opacity:.55}
+.duong{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;overflow:visible}      /* trên các cột (z-index:1), nếu không hộp đè mất đoạn đầu của đường */
+.duong path{fill:none;stroke:var(--primary-color,#03a9f4);stroke-linecap:round;opacity:.85}
+.duong circle.nguon{fill:var(--primary-color,#03a9f4)}
 .duong path.chay{stroke-dasharray:6 8;animation:chay linear infinite}
 .duong path.nd{animation:none}
 .duong path.nd0{stroke-dasharray:5 6}
@@ -1094,6 +1096,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       const cfgHl = autoCauHinh(this._hass.states, this._cfg);
       const model = discover(this._hass.states, cfgHl);
       this._ui.clients = model.clients;
+      this._ui.cfgHl = cfgHl;           // cấu hình đã thêm hộp tự dựng từ cây: nơi vẽ đường và nút «gán» phải dùng đúng bản này
       this._ui.states = this._hass.states;
       this._ui.entities = this._hass.entities || {};
       const chuKy = JSON.stringify([model, this._ui.search, this._ui.limit, this._cfg.language, this._ui.gan, this._ui.nodes, this._ui.edit,
@@ -1160,7 +1163,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       }));
       r.querySelectorAll('[data-act="gan"]').forEach((nut) => nut.addEventListener('click', () => {
         const mac = nut.dataset.mac;
-        const { nut: ds } = phanNhom([], this._cfg, {}, this._hass.states, this._ui.nodes);
+        const { nut: ds } = phanNhom([], this._ui.cfgHl || this._cfg, {}, this._hass.states, this._ui.nodes);
         const g = this._ui.gan[mac];
         const hien = g == null ? -1 : ds.findIndex((n) => n.key === (typeof g === 'number' ? `ap-${g}` : g));
         if (hien + 1 >= ds.length) delete this._ui.gan[mac]; else this._ui.gan[mac] = ds[hien + 1].key;
@@ -1188,15 +1191,17 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       const noi = (tu, den, nd = '') => {
         if (!tu || !den) return;
         const p = diem(tu, 'phai'); const q = diem(den, 'trai');
+        if (q.x <= p.x) return;          // đích không nằm bên phải nguồn (ví dụ cổng nằm trong hộp router): không có gì để nối
         const luu = Number(den.dataset.luu || tu.dataset.luu || 0);
-        const rong = luu > 0 ? Math.min(4, 1.2 + Math.log10(luu + 1) / 2.2) : 1;
+        const rong = luu > 0 ? Math.min(4, 1.8 + Math.log10(luu + 1) / 2.2) : 1.8;
         const giay = !nd && luu > 0 ? Math.max(0.5, 4 - Math.log10(luu + 1) * 0.5) : 0;
         const mx = (p.x + q.x) / 2;
-        const lop = nd ? `nd ${nd}` : (giay ? 'chay' : '');
+        const lop = nd ? `nd ${nd}` : (giay ? 'chay' : 'nd nd0');       // không có lưu lượng: nét đứt tĩnh, không để nét liền mờ
         duong.push(`<path d="M${p.x},${p.y} C${mx},${p.y} ${mx},${q.y} ${q.x},${q.y}" stroke-width="${rong.toFixed(2)}" class="${lop}" style="${giay ? `animation-duration:${giay.toFixed(2)}s` : ''}"/>`);
+        duong.push(`<circle class="nguon" cx="${p.x}" cy="${p.y}" r="3.5"/>`);      // chấm ở nguồn: thấy rõ đường đi ra từ cổng/hộp nào
       };
       noi(tim('isp'), tim('router'));
-      const { nut, nhom } = phanNhom(this._ui.clients || [], this._cfg, {}, this._hass ? this._hass.states : {}, this._ui.nodes);
+      const { nut, nhom } = this._ui.nhomVe || { nut: [], nhom: [] };
       for (const n of nut) {
         const anh = nut.filter((x) => x.parent && x.parent === n.parent).indexOf(n) % 4;
         // Máy con (LXC/VM) nối bằng nét đứt từ THIẾT BỊ NGUỒN (dòng của máy host trong hộp cha), không từ mép hộp.

@@ -1,5 +1,10 @@
 # Lịch sử thay đổi
 
+## 0.8.2
+- **Sửa: không có đường nối nào với hộp tự dựng từ `topo_sensor`.** Hàm vẽ đường đọc cấu hình gốc và danh sách máy từ thực thể theo dõi, nên không thấy hộp SW/ZTE tự dựng và máy lấy từ cây thiết bị. Nay dùng đúng nhóm mà bước dựng giao diện đã dùng.
+- Đường nối là nét đứt rõ (dày hơn, đậm hơn), có chấm ở điểm xuất phát; lớp đường nằm trên các cột nên không còn bị hộp che mất đoạn đầu.
+- Không vẽ đường đi ngược (đích bên trái nguồn), như đường «router → cổng» vốn nằm trong hộp router.
+
 ## 0.8.1
 - `topo_sensor`: tốc độ nhận/gửi từng máy (`rx_bps`/`tx_bps` của cây, lấy từ Kid Control qua tích hợp) vào thông tin thiết bị trên card.
 
