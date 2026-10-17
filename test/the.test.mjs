@@ -410,3 +410,21 @@ test('hộp chứa nhiều IP (tên tùy ý): thiết bị có tiền tố MAC k
   const khongKhai = dungNut({ hosts: [{ name: 'NAS', ip: '172.16.10.5' }] }, [], may);
   assert.equal(khongKhai.filter((n) => n.guest).length, 0, 'không khai tiền tố thì không tự thêm');
 });
+
+test('hộp lồng nhiều tầng: hộp con khai tay lồng tiếp; máy có tiền tố MAC tự thành hộp con ở đúng tầng; không đếm trùng', () => {
+  const may = [
+    { mac: 'bc:24:11:69:c8:47', name: 'Adguard home', ip: '172.16.10.10', online: true },
+    { mac: '02:00:00:00:00:99', name: 'May la', ip: '172.16.10.99', online: true },
+  ];
+  const cfg = { switches: [{ name: 'SW1', port: 'ether2' }], hosts: [{ name: 'NAS', ip: '172.16.10.5', switch: 'SW1', guest_mac_prefix: 'bc:24:11',
+    children: [{ name: 'VM docker', ip: '172.16.10.20', children: [{ name: 'Container', ip: '172.16.10.21' }] }] }] };
+  const nut = dungNut(cfg, [], may);
+  const nas = nut.find((n) => n.name === 'NAS');
+  const vm = nut.find((n) => n.name === 'VM docker');
+  const ct = nut.find((n) => n.name === 'Container');
+  assert.equal(vm.parent, nas.key, 'VM docker nằm trong NAS');
+  assert.equal(ct.parent, vm.key, 'Container nằm trong VM docker (tầng 3)');
+  const guests = nut.filter((n) => n.guest);
+  assert.deepEqual(guests.map((g) => g.parent), [nas.key], 'Adguard là hộp con của NAS, một lần duy nhất');
+  assert.ok(!guests.some((g) => g.macs.includes('02:00:00:00:00:99')));
+});
