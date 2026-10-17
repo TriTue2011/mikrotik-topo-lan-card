@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Xem thử card (dữ liệu mẫu ẩn danh)</title>
+<style>
+:root{--primary-color:#03a9f4;--primary-text-color:#212121;--secondary-text-color:#727272;--divider-color:#e0e0e0;--card-background-color:#fff;--secondary-background-color:#f1f1f1;--success-color:#43a047;--error-color:#e53935}
+body{margin:0;padding:16px;background:#fafafa;font-family:Roboto,system-ui,sans-serif}
+ha-card{display:block}
+</style></head>
+<body><div id="goc"></div>
+<script type="module">
+import './../mikrotik-topo-lan-card.js';
+const ds = await (await fetch('../test/fixtures/states.json')).json();
+const states = Object.fromEntries(ds.map((s) => [s.entity_id, { state: s.state, attributes: s.attributes }]));
+// Mô phỏng cảm biến «MAC theo cổng»: 12 thiết bị đầu tiên nằm sau cổng ether2 (nơi cắm bộ phát WiFi).
+const macs = ds.filter((s) => s.entity_id.startsWith('device_tracker.')).map((s) => s.attributes.mac);
+states['sensor.mikrotik_bang_mac'] = { state: '2', attributes: { ether2: macs.slice(0, 12), ether3: macs.slice(12, 22) } };
+states['device_tracker.zte_wifi'] = { state: 'home', attributes: {} };
+const card = document.createElement('mikrotik-topo-lan-card');
+card.setConfig({ type: 'custom:mikrotik-topo-lan-card', title: 'Mạng LAN nhà',
+  access_points: [{ name: 'ZTE WiFi', port: 'ether2', entity: 'device_tracker.zte_wifi', mac_sensor: 'sensor.mikrotik_bang_mac' }],
+  port_names: { ether1: 'Bộ phát WiFi', ether2: 'Switch phòng khách' }, client_limit: 12 });
+document.getElementById('goc').appendChild(card);
+card.hass = { states };
+</script></body></html>
