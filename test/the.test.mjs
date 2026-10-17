@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh, toBytes, fmtBytes, detectPrefix, capNhatCauHinh, themMuc, xoaMuc, suaMuc, phanTichNguon, layNguon, giaTriTruong } from '../mikrotik-topo-lan-card.js';
+import { tocDoTuThietBi, esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh, toBytes, fmtBytes, detectPrefix, capNhatCauHinh, themMuc, xoaMuc, suaMuc, phanTichNguon, layNguon, giaTriTruong } from '../mikrotik-topo-lan-card.js';
 
 const mang = JSON.parse(readFileSync(new URL('./fixtures/states.json', import.meta.url), 'utf8'));
 const states = Object.fromEntries(mang.map((s) => [s.entity_id, { state: s.state, attributes: s.attributes }]));
@@ -517,4 +517,39 @@ test('tốc độ từng máy: nguồn đo (Kid Control) bổ sung cho nguồn W
   const w2 = thongTinWifi({ sources: [cfg.sources[0], { entity: 'sensor.zte', attribute: 'clients' }] }, st);
   assert.equal(w2['02:00:00:00:00:51'].rxRate, 2000000);
   assert.equal(w2['02:00:00:00:00:51'].band, '5G');
+});
+
+test('tốc độ từng máy từ tích hợp MikroTik: nối cảm biến RX/TX với tracker qua thiết bị; chỉ nhận đơn vị tốc độ; 0 thì ẩn', () => {
+  const tr = (mac) => ({ state: 'home', attributes: { attribution: 'Data provided by Mikrotik', mac, ip: '192.168.88.9', host_name: 'Cam', interface: 'BridgeLAN' } });
+  const st = {
+    'device_tracker.cam': tr('A8:31:62:66:F3:E3'),
+    'sensor.cam_rx': { state: '250', attributes: { friendly_name: 'Cam phong khach RX (Mikrotik)', unit_of_measurement: 'kB/s' } },
+    'sensor.cam_tx': { state: '0', attributes: { friendly_name: 'Cam phong khach TX (Mikrotik)', unit_of_measurement: 'kB/s' } },
+    'sensor.cam_rx_total': { state: '9000', attributes: { friendly_name: 'Cam phong khach RX total', unit_of_measurement: 'B' } },
+    'device_tracker.tv': tr('AA:BB:CC:00:00:09'),
+    'sensor.tv_rx': { state: '0', attributes: { friendly_name: 'Tivi RX (Mikrotik)', unit_of_measurement: 'kB/s' } },
+    'sensor.tv_tx': { state: '0', attributes: { friendly_name: 'Tivi TX (Mikrotik)', unit_of_measurement: 'kB/s' } },
+    'sensor.khac_rx': { state: '5', attributes: { friendly_name: 'Máy khác RX', unit_of_measurement: 'kB/s' } }
+  };
+  const entities = { 'device_tracker.cam': { device_id: 'd1' }, 'sensor.cam_rx': { device_id: 'd1' }, 'sensor.cam_tx': { device_id: 'd1' }, 'sensor.cam_rx_total': { device_id: 'd1' },
+    'device_tracker.tv': { device_id: 'd2' }, 'sensor.tv_rx': { device_id: 'd2' }, 'sensor.tv_tx': { device_id: 'd2' }, 'sensor.khac_rx': { device_id: 'd3' } };
+  const kq = tocDoTuThietBi(st, entities);
+  assert.deepEqual(kq['a8:31:62:66:f3:e3'], { rxRate: 2e6, txRate: 0 });
+  assert.equal(kq['aa:bb:cc:00:00:09'].rxRate, 0);
+  assert.deepEqual(tocDoTuThietBi({ 'device_tracker.zz': tr('AA:BB:CC:00:00:77') }, {}), {}, 'không có cảm biến nào thì rỗng, không bịa');
+  const m = discover(st, {});
+  const html = renderHtml(m, {}, { states: st, entities });
+  assert.match(html, /↓<\/b>2\.00 Mbps/);
+  // Tivi đo được 0/0: không hiện mũi tên; chỉ máy có tốc độ thật có ↓.
+  assert.equal((html.match(/↓<\/b>/g) || []).length, 1);
+});
+
+test('tốc độ từng máy: không có sổ thực thể thì nối theo tên (device_tracker.X ↔ sensor.X_rx_mikrotik / sensor.X_tx_mikrotik)', () => {
+  const st = {
+    'device_tracker.cam_phong_khach': { state: 'home', attributes: { attribution: 'Data provided by Mikrotik', mac: 'A8:31:62:66:F3:E3', ip: '192.168.88.9', host_name: 'Cam phong khach', interface: 'BridgeLAN' } },
+    'sensor.cam_phong_khach_rx_mikrotik': { state: '12', attributes: { unit_of_measurement: 'kB/s' } },
+    'sensor.cam_phong_khach_tx_mikrotik': { state: '0,0', attributes: { unit_of_measurement: 'kB/s' } },
+    'sensor.cam_phong_khach_rx_total_mikrotik': { state: '5', attributes: { unit_of_measurement: 'GB' } }
+  };
+  assert.deepEqual(tocDoTuThietBi(st, {})['a8:31:62:66:f3:e3'], { rxRate: 96000, txRate: 0 });
 });

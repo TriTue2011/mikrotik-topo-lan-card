@@ -1,5 +1,9 @@
 # Lịch sử thay đổi
 
+## 0.6.2
+- **Tốc độ từng máy tự động** từ cảm biến RX/TX của chính tích hợp MikroTik (nối qua sổ thực thể của Home Assistant); bằng 0 thì ẩn.
+- Card vẽ lại khi giá trị của thực thể trong `sources`/`fields` thay đổi.
+
 ## 0.6.1
 - Bỏ chế độ WiFi (802.11n…) khỏi nhãn thiết bị; chỉ còn băng tần và tín hiệu.
 - **Tốc độ từng máy** từ Kid Control của MikroTik: `tools/mikrotik_toc_do_may.py` + nguồn `sources` không gắn hộp. Gộp theo MAC giữa các nguồn, tốc độ 0 không ghi đè số thật.

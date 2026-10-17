@@ -84,8 +84,10 @@ command_line:
 (`secrets` không tự thay trong chuỗi lệnh: dùng `shell_command`/biến môi trường theo cách bạn quen, hoặc chép mật khẩu vào tệp chỉ root đọc được.) Thêm `--tls --port 8729 --insecure` nếu dùng API-SSL với chứng chỉ tự ký.
 Thuộc tính của cảm biến đặt theo **tên cổng** (`ether2`…) khớp với cổng bạn cho nút cắm vào.
 
-## Tốc độ vào/ra từng thiết bị (Kid Control)
-MikroTik Extended không đo lưu lượng theo máy; ZTE E2633 cũng không báo. RouterOS có Kid Control đo theo MAC, `tools/mikrotik_toc_do_may.py` đọc nó (chỉ ĐỌC, cùng cách với `mikrotik_bridge_hosts.py`):
+## Tốc độ vào/ra từng thiết bị
+**Tự động**: mỗi máy trong tích hợp MikroTik là một thiết bị của Home Assistant có hai cảm biến **RX** và **TX** (đơn vị kB/s…). Card nối chúng với tracker của máy qua sổ thực thể của Home Assistant (hoặc theo tên: `device_tracker.cam_phong_khach` ↔ `sensor.cam_phong_khach_rx_mikrotik`, `sensor.cam_phong_khach_tx_mikrotik`) và hiện ↓ ↑ cạnh máy; bằng 0 thì ẩn. Không cần khai gì. Nếu máy không có hai cảm biến đó, bật theo tuỳ chọn theo dõi lưu lượng máy của tích hợp (tên tuỳ chọn tuỳ phiên bản tích hợp, **chưa đối chiếu**).
+
+**Nguồn khác** (không có cảm biến trên): ZTE E2633 không báo tốc độ từng máy, nhưng RouterOS có Kid Control đo theo MAC; `tools/mikrotik_toc_do_may.py` đọc nó (chỉ ĐỌC, cùng cách với `mikrotik_bridge_hosts.py`):
 
 1. Trên router bật Kid Control một lần: `/ip kid-control add name=ca-nha mon=0s-1d tue=0s-1d wed=0s-1d thu=0s-1d fri=0s-1d sat=0s-1d sun=0s-1d`.
 2. Chép `tools/mikrotik_toc_do_may.py` **và** `tools/mikrotik_bridge_hosts.py` vào `/config/`, rồi tạo cảm biến như mục bảng MAC ở trên:

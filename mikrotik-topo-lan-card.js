@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.6.1';
+export const VERSION = '0.6.2';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -321,9 +321,50 @@ export function layNguon(cfg = {}, states = {}) {
   return ra.map((sc) => ({ node: String(sc.node || ''), devices: phanTichNguon(sc, states) }));
 }
 
-/** {mac: {band, rssi, mode, rxRate, txRate}} của mọi nguồn — để hiện băng tần, tín hiệu, tốc độ cạnh thiết bị. */
-export function thongTinWifi(cfg = {}, states = {}) {
+/**
+ * Tốc độ từng thiết bị do chính tích hợp MikroTik đo: mỗi máy là một «thiết bị» của Home Assistant có tracker và hai cảm biến
+ * RX, TX (đơn vị tốc độ như kB/s). Nối bằng `entities` (sổ thực thể của hass: entity_id → device_id), không dò theo tên máy.
+ * Chỉ nhận cảm biến có đơn vị tốc độ (tổng byte bị bỏ). Trả {mac: {rxRate, txRate}} (bit/giây); thiếu sổ thực thể thì rỗng.
+ */
+export function tocDoTuThietBi(states = {}, entities = {}) {
+  const theoThietBi = new Map();
+  for (const [eid, e] of Object.entries(entities || {})) {
+    if (!e || !e.device_id || !eid.startsWith('sensor.')) continue;
+    const st = (states || {})[eid];
+    const a = st ? st.attributes || {} : null;
+    if (!a || !DON_VI_BPS[String(a.unit_of_measurement || '').trim().toLowerCase()]) continue;
+    const m = /(?:^|[\s_.])(rx|tx)(?:[\s_)(]|$)/i.exec(String(a.friendly_name || eid));
+    if (!m) continue;
+    const kv = theoThietBi.get(e.device_id) || {};
+    kv[m[1].toLowerCase()] = toBps(st.state, a.unit_of_measurement);
+    theoThietBi.set(e.device_id, kv);
+  }
+  // Dự phòng khi hass chưa có sổ thực thể: cảm biến đặt theo tên tracker, dạng sensor.<tên>_rx_<hậu tố> và sensor.<tên>_tx_<hậu tố>
+  // (ví dụ device_tracker.cam_phong_khach ↔ sensor.cam_phong_khach_rx_mikrotik). Chỉ nhận đơn vị tốc độ.
+  const theoTen = new Map();
+  for (const [eid, st] of Object.entries(states || {})) {
+    const m = /^sensor\.(.+?)_(rx|tx)(?:_[a-z0-9]+)?$/.exec(eid);
+    const a = st && st.attributes;
+    if (!m || !a || !DON_VI_BPS[String(a.unit_of_measurement || '').trim().toLowerCase()]) continue;
+    const kv = theoTen.get(m[1]) || {};
+    kv[m[2]] = toBps(st.state, a.unit_of_measurement);
+    theoTen.set(m[1], kv);
+  }
   const ra = {};
+  for (const [eid, st] of Object.entries(states || {})) {
+    if (!eid.startsWith('device_tracker.')) continue;
+    const mac = macChuan((st.attributes || {}).mac);
+    const e = (entities || {})[eid];
+    const kv = (e && e.device_id && theoThietBi.get(e.device_id)) || theoTen.get(eid.slice('device_tracker.'.length));
+    if (mac && kv) ra[mac] = { rxRate: kv.rx ?? null, txRate: kv.tx ?? null };
+  }
+  return ra;
+}
+
+/** {mac: {band, rssi, mode, rxRate, txRate}} của mọi nguồn — để hiện băng tần, tín hiệu, tốc độ cạnh thiết bị. */
+export function thongTinWifi(cfg = {}, states = {}, entities = {}) {
+  const ra = {};
+  for (const [mac, v] of Object.entries(tocDoTuThietBi(states, entities))) ra[mac] = { band: '', rssi: null, mode: '', rxRate: v.rxRate, txRate: v.txRate };
   for (const g of layNguon(cfg, states)) {
     // Gộp theo MAC giữa các nguồn: trường nào nguồn sau có giá trị thật thì ghi đè; tốc độ 0 không xoá tốc độ thật của nguồn khác
     // (ví dụ ZTE báo 0, Kid Control của MikroTik báo số đo được).
@@ -679,7 +720,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     <div class="hang" data-anchor="ham-${esc(h.id)}" data-luu="${esc(Math.round(h.rx + h.tx))}">
       ${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span><span class="lu">${esc(h.connected ? t.connected : t.disconnected)}</span>${dongLuuLuong(h.rx, h.tx, t)}
     </div>`;
-  const wifi = thongTinWifi(cfg, ui.states || {});
+  const wifi = thongTinWifi(cfg, ui.states || {}, ui.entities || {});
   const chipWifi = (c) => {
     const w = wifi[macChuan(c.mac)];
     if (!w) return '';
@@ -973,11 +1014,16 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       const model = discover(this._hass.states, cfgHl);
       this._ui.clients = model.clients;
       this._ui.states = this._hass.states;
+      this._ui.entities = this._hass.entities || {};
       const chuKy = JSON.stringify([model, this._ui.search, this._ui.limit, this._cfg.language, this._ui.gan, this._ui.nodes, this._ui.edit,
         (this._cfg.access_points || []).map((a) => (a && a.entity && this._hass.states[a.entity] ? this._hass.states[a.entity].state : '')),
         [this._cfg, ...(this._cfg.switches || []), ...(this._cfg.access_points || [])]
           .map((x) => (x && x.mac_sensor && this._hass.states[x.mac_sensor] ? JSON.stringify(this._hass.states[x.mac_sensor].attributes) : '')),
-        (this._cfg.access_points || []).map((x) => (x && x.clients_sensor && this._hass.states[x.clients_sensor] ? JSON.stringify(this._hass.states[x.clients_sensor].attributes) : ''))]);
+        (this._cfg.access_points || []).map((x) => (x && x.clients_sensor && this._hass.states[x.clients_sensor] ? JSON.stringify(this._hass.states[x.clients_sensor].attributes) : '')),
+        // Mọi thực thể cấu hình nhắc tới (sources, fields…) và tốc độ từng máy: đổi giá trị thì vẽ lại.
+        [...new Set(JSON.stringify(this._cfg).match(/"(?:entity|clients_sensor|mac_sensor)":"[^"]+"/g) || [])]
+          .map((k) => { const st = this._hass.states[k.split('":"')[1].slice(0, -1)]; return st ? [st.state, st.attributes] : null; }),
+        thongTinWifi(cfgHl, this._hass.states, this._ui.entities)]);
       if (!ep && chuKy === this._chuKy) return;
       this._chuKy = chuKy;
       const dangTim = this.shadowRoot.activeElement && this.shadowRoot.activeElement.classList.contains('tim');
