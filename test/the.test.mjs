@@ -372,7 +372,7 @@ test('hộp MikroTik: khối WAN và khối Bridge LAN xếp chồng; trong Brid
   const m = discover(st, {});
   const html = renderHtml(m, {}, { states: st, gan: {}, nodes: [] });
   assert.match(html, /wan-hop/);
-  assert.match(html, /1\.52\.139\.243/);
+  assert.match(html, /wan-hop/);
   assert.match(html, /BRIDGE LAN/);
   assert.match(html, /data-port="ether2"[^>]*checked/);
   assert.match(html, /data-port="ether3"[^>]*checked/);
@@ -381,4 +381,14 @@ test('hộp MikroTik: khối WAN và khối Bridge LAN xếp chồng; trong Brid
   const boChon = renderHtml(m, {}, { bridge: ['ether2'], states: st, gan: {}, nodes: [] });
   assert.match(boChon, /data-port="ether2"[^>]*checked/);
   assert.doesNotMatch(boChon, /data-port="ether3"[^>]*checked/);
+});
+
+test('switch nối vào switch khác (khai switch: <tên>); khai vòng thì bỏ qua, không treo', () => {
+  const nut = dungNut({ switches: [{ name: 'SW1', port: 'ether2' }, { name: 'SW1b', switch: 'SW1' }] }, []);
+  const sw1b = nut.find((n) => n.name === 'SW1b');
+  assert.equal(sw1b.parent, 'sw-0', 'SW1b nối dưới SW1');
+  assert.equal(sw1b.port, '');
+  const vong = dungNut({ switches: [{ name: 'A', switch: 'B' }, { name: 'B', switch: 'A' }] }, []);
+  const a = vong.find((n) => n.name === 'A'); const b = vong.find((n) => n.name === 'B');
+  assert.ok(!(a.parent === b.key && b.parent === a.key), 'không tạo vòng A↔B');
 });

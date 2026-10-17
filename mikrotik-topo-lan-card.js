@@ -290,6 +290,16 @@ export function dungNut(cfg = {}, userNodes = []) {
     nut.push({ key: `sw-${i}`, kind: KIND_SWITCH, name: w.name || `Switch ${i + 1}`, port: w.port || '', parent: '', macs: (w.macs || []).map(macChuan),
       ips: [], entity: w.entity || '', tuDong: false, nguon: 'cfg', macSensor: w.mac_sensor || '' });
   });
+  // Switch nối vào một switch khác: khai `switch: <tên switch cha>`. Không cho tạo vòng (A→B→A).
+  (cfg.switches || []).forEach((w, i) => {
+    if (!w || !w.switch) return;
+    const me = nut.find((n) => n.key === `sw-${i}`);
+    const cha = nut.find((n) => n.kind === KIND_SWITCH && n.name === w.switch && n.key !== `sw-${i}`);
+    if (!me || !cha) return;
+    let x = cha; let vong = false;
+    while (x) { if (x.key === me.key) { vong = true; break; } x = x.parent ? nut.find((n) => n.key === x.parent) : null; }
+    if (!vong) { me.parent = cha.key; me.port = ''; }
+  });
   (cfg.access_points || []).forEach((a, i) => {
     if (!a) return;
     const cha = a.switch ? (nut.find((n) => n.kind === KIND_SWITCH && n.name === a.switch) || {}).key || '' : '';
@@ -434,19 +444,21 @@ export function noiCam(model, nut) {
   ];
 }
 
-/** Hộp MikroTik trong sơ đồ: khối WAN (trên) và BRIDGE LAN (dưới), gọn; mỗi cổng ether là một ô nhỏ. Tự lấy thông số. */
-function renderRouterBox(model, cfg, ui, t) {
-  const { wan, ports, bridges } = model;
+/** Hộp MikroTik trong sơ đồ: hộp WAN (cùng kiểu hộp nhà mạng), hộp BRIDGE LAN chứa các hộp cổng ether (cùng kiểu hàng cổng). */
+function renderRouterBox(model, cfg, ui, t, hangCong) {
+  const { wan, wanCong, ports, bridges } = model;
   const macDinh = ports.map((g) => g.name);
   const thanhVien = Array.isArray(ui.bridge) ? ui.bridge : (Array.isArray(cfg.bridge_ports) ? cfg.bridge_ports : macDinh);
   const br = bridges[0];
-  const wanHtml = !wan ? '' : `<div class="hop-con wan-hop">
-      <div class="hop-dong">${chamTrangThai(wan.running)}<b>WAN</b> ${esc(cfg.isp_name || wan.comment || t.internet)} <span class="phu">${esc(wan.name)}</span></div>
-      <div class="hop-dong phu">${esc(wan.ip || '')} ${dongLuuLuong(wan.rx, wan.tx, t)}</div>
+  const wanHtml = !wan ? '' : `<div class="nut-node wan-hop" data-anchor="isp-trong">
+      <div class="nt">${chamTrangThai(wan.running)}<span>${esc(cfg.isp_name || wan.comment || t.internet)}</span></div>
+      ${dongLuuLuong(wan.rx, wan.tx, t)}
+      <div class="phu">${esc(t.cong)} ${esc(wanCong ? wanCong.name : wan.name)}</div>
     </div>`;
   const bridgeHtml = `<div class="hop-con bridge-khoi" data-members="${esc(thanhVien.join(','))}">
-      <div class="hop-dong">${chamTrangThai(br ? br.running : null)}<b>BRIDGE LAN</b></div>
-      <div class="cong-chon">${ports.map((g) => `<label class="chon-cong ${g.running ? '' : 'off'}"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}> ${esc(g.name)} ${dongLuuLuong(g.rx, g.tx, t)}</label>`).join('') || `<span class="phu">${esc(t.chuaCo)}</span>`}</div>
+      <div class="tieu-nhom">BRIDGE LAN</div>
+      ${br ? hangCong(br) : ''}
+      ${ports.map((g) => `<div class="chon-dong"><label class="chon-cong"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}></label>${hangCong(g)}</div>`).join('') || `<div class="phu">${esc(t.chuaCo)}</div>`}
     </div>`;
   return `${wanHtml}${bridgeHtml}`;
 }
@@ -566,7 +578,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   // Một nhánh = một cổng MikroTik, bên phải là các nút cắm vào cổng đó.
   const nhanhCong = (pt) => {
     const con = nut.filter((n) => !n.parent && chuanCong(n.port) === chuanCong(pt.name));
-    return `<div class="nhanh">${hangCong(pt)}<div class="con">${con.map(nutCon).join('')}</div></div>`;
+    return con.length ? `<div class="nhanh"><div class="nhanh-ten phu">${esc(pt.name)}</div><div class="con">${con.map(nutCon).join('')}</div></div>` : '';
   };
   const chuaGan = nhomHien.filter((g) => !g.node && g.hien.length);
   // Nút gắn vào một cổng không hiện trên card (hoặc chưa khai cổng): vẫn hiện ở cuối, không mất.
@@ -580,21 +592,13 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     ${bang}
     <div class="cay">
       <svg class="duong" aria-hidden="true"></svg>
-      <div class="cot cot-isp">
-        <div class="nut-node" data-anchor="isp" data-luu="${esc(wan ? Math.round(wan.rx + wan.tx) : 0)}">
-          <div class="nt">${wan ? chamTrangThai(wan.running) : ''}<span>${esc(cfg.isp_name || (wan && wan.comment) || t.internet)}</span></div>
-          ${wan ? dongLuuLuong(wan.rx, wan.tx, t) : ''}
-        </div>
-      </div>
       <div class="cot cot-router">
         <div class="nut-node chinh" data-anchor="router">
           <div class="nt"><span>${esc(tenRouter)}</span></div>
           <div class="phu">${core.cpu != null ? `${esc(t.cpu)} ${esc(core.cpu)}%` : ''} ${core.ram != null ? `· ${esc(t.ram)} ${esc(core.ram)}%` : ''}</div>
           <div class="phu">${core.uptime ? `${esc(t.uptime)} ${esc(fmtUptime(core.uptime, now))}` : ''} ${core.version ? `· RouterOS ${esc(core.version)}` : ''}</div>
-        ${renderRouterBox(model, cfg, ui, t)}
+        ${renderRouterBox(model, cfg, ui, t, hangCong)}
         </div>
-        <div class="tieu-nhom">${esc(t.ports)} · LAN</div>
-        ${[...bridges, ...ppp].map((g) => hangCong(g)).join('')}
         ${vpnHtml}
       </div>
       <div class="cot cot-cong">
@@ -620,7 +624,7 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .nut-sua{cursor:pointer}
 .nut-sua[aria-pressed="true"]{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
 .chip b,.lu b{color:var(--primary-color);margin-right:3px}
-.cay{position:relative;display:grid;grid-template-columns:minmax(120px,0.8fr) minmax(170px,1fr) minmax(0,3fr);gap:24px;align-items:start}
+.cay{position:relative;display:grid;grid-template-columns:minmax(300px,1fr) minmax(0,3fr);gap:24px;align-items:start}
 .nhanh{display:grid;grid-template-columns:minmax(240px,1fr) minmax(0,2fr);gap:14px;align-items:start;margin-bottom:10px}
 .nhanh>.con{display:flex;flex-direction:column;gap:8px}
 .nut-con{border:1px solid var(--divider-color,#444);border-radius:12px;padding:8px 10px}
@@ -629,6 +633,7 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .duong{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
 .duong path{fill:none;stroke:var(--primary-color,#03a9f4);stroke-linecap:round;opacity:.55}
 .duong path.chay{stroke-dasharray:6 8;animation:chay linear infinite}
+.duong path.nd{stroke-dasharray:5 6;animation:none}
 @keyframes chay{to{stroke-dashoffset:-28}}
 .cot{position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;min-width:0}
 .nut-node{padding:10px 12px;border-radius:12px;border:1px solid var(--divider-color,#ddd);background:var(--card-background-color,#fff)}
@@ -658,8 +663,9 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .sua label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--secondary-text-color)}
 .sua label.ngang{flex-direction:row;align-items:center;gap:8px}
 .hang-nut{display:flex;gap:8px}
-.cot-router{min-width:280px}
-.cot-router .nut-node.chinh{min-height:520px}
+.cot-router .bridge-khoi .chon-dong{display:flex;align-items:center;gap:6px}
+.cot-router .bridge-khoi .chon-dong .hang{flex:1;min-width:0}
+.cot-router .bridge-khoi .chon-dong input{margin:0}
 .hop-con{border:1px solid var(--divider-color,#444);border-radius:10px;padding:6px 8px;margin:6px 0}
 .hop-dong{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:.9rem;margin:2px 0}
 .tab-con-hang{display:flex;gap:6px;padding:0 12px 10px;flex-wrap:wrap}
@@ -671,7 +677,8 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .wan-tieu{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:1.05rem}
 .wan-luoi{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 18px}
 .cong-chon{display:flex;flex-wrap:wrap;gap:8px 14px}
-.chon-cong{display:flex;gap:6px;align-items:center;padding:4px 8px;border:1px solid var(--divider-color,#444);border-radius:10px}
+.chon-cong{display:inline-flex;gap:6px;align-items:center;padding:0}
+.chon-goc{margin-left:auto}
 .cong-the{margin-bottom:8px}
 .cong-chi-tiet{margin:0 0 4px 26px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0 18px}
 .hang-chip{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
@@ -842,18 +849,19 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         return cay.querySelector(`[data-name="${k}"]`) || cay.querySelector(`[data-ids~="${k}"]`);
       };
       const duong = [];
-      const noi = (tu, den) => {
+      const noi = (tu, den, nd = false) => {
         if (!tu || !den) return;
         const p = diem(tu, 'phai'); const q = diem(den, 'trai');
         const luu = Number(den.dataset.luu || tu.dataset.luu || 0);
         const rong = luu > 0 ? Math.min(4, 1.2 + Math.log10(luu + 1) / 2.2) : 1;
-        const giay = luu > 0 ? Math.max(0.5, 4 - Math.log10(luu + 1) * 0.5) : 0;
+        const giay = !nd && luu > 0 ? Math.max(0.5, 4 - Math.log10(luu + 1) * 0.5) : 0;
         const mx = (p.x + q.x) / 2;
-        duong.push(`<path d="M${p.x},${p.y} C${mx},${p.y} ${mx},${q.y} ${q.x},${q.y}" stroke-width="${rong.toFixed(2)}" class="${giay ? 'chay' : ''}" style="${giay ? `animation-duration:${giay.toFixed(2)}s` : ''}"/>`);
+        const lop = nd ? 'nd' : (giay ? 'chay' : '');
+        duong.push(`<path d="M${p.x},${p.y} C${mx},${p.y} ${mx},${q.y} ${q.x},${q.y}" stroke-width="${rong.toFixed(2)}" class="${lop}" style="${giay ? `animation-duration:${giay.toFixed(2)}s` : ''}"/>`);
       };
       noi(tim('isp'), tim('router'));
       const { nut } = phanNhom([], this._cfg, {}, this._hass ? this._hass.states : {}, this._ui.nodes);
-      for (const n of nut) noi(n.parent ? tim(`n-${n.parent}`) : (n.port ? timCong(n.port) : null), tim(`n-${n.key}`));
+      for (const n of nut) noi(n.parent ? tim(`n-${n.parent}`) : (n.port ? timCong(n.port) : null), tim(`n-${n.key}`), !!n.parent);
       cay.querySelectorAll('[data-anchor^="cong-"], [data-anchor^="ham-"]').forEach((el) => noi(tim('router'), el));
       svg.innerHTML = duong.join('');
     }
