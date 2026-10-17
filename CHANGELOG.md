@@ -1,5 +1,8 @@
 # Lịch sử thay đổi
 
+## 0.6.3
+- README: hướng dẫn cài tích hợp MikroTik Extended và ZTE (`zte_tracker` bản E2633) ngay sau mục Cài đặt; yêu cầu phiên bản thống nhất; bỏ chỉ dẫn tới kho chưa công bố.
+
 ## 0.6.2
 - **Tốc độ từng máy tự động** từ cảm biến RX/TX của chính tích hợp MikroTik (nối qua sổ thực thể của Home Assistant); bằng 0 thì ẩn.
 - Card vẽ lại khi giá trị của thực thể trong `sources`/`fields` thay đổi.

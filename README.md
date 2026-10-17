@@ -6,14 +6,73 @@ Card Lovelace cho Home Assistant vẽ **sơ đồ mạng LAN của router MikroT
 > Ý tưởng sơ đồ cây lấy cảm hứng từ [doanlong1412/snmp-topo-lan-card](https://github.com/doanlong1412/snmp-topo-lan-card) (MIT). Card này viết lại cho MikroTik, nguồn dữ liệu khác (tích hợp MikroTik thay cho SNMP Switch Manager).
 
 ## Yêu cầu
-- Home Assistant 2024.6 trở lên.
+- Home Assistant 2024.11 trở lên và RouterOS 7 trở lên (theo MikroTik Extended); cài tích hợp ZTE thì cần Home Assistant 2025.1 trở lên.
 - Tích hợp MikroTik tạo các thực thể kiểu `sensor.<tiền_tố>_port_<id>_rx|tx`, `binary_sensor.<tiền_tố>_port_<id>_connection`, `sensor.<tiền_tố>_core_cpu_load`, `device_tracker.*`
-  (ví dụ tích hợp **Mikrotik Router** / **MikroTik Extended**; tiền tố mặc định `mikrotik_router`).
+  (ví dụ tích hợp **MikroTik Extended**; tiền tố mặc định `mikrotik_router`).
 
 ## Cài đặt
 **HACS:** Custom repositories → URL repo này → loại *Dashboard* → cài → tải lại trình duyệt (`Ctrl+Shift+R`).
 **Thủ công:** chép `mikrotik-topo-lan-card.js` vào `/config/www/community/mikrotik-topo-lan-card/`, rồi Settings → Dashboards → Resources:
 `/local/community/mikrotik-topo-lan-card/mikrotik-topo-lan-card.js` loại *JavaScript module*.
+
+## Cài tích hợp MikroTik Extended
+
+Card tự nhận các thực thể của tích hợp **MikroTik Extended**, không cần khai tiền tố hay tên cổng. Chỉ cần thêm card:
+
+```yaml
+type: custom:mikrotik-topo-lan-card
+```
+
+**1. Cài tích hợp.** Trong HACS, tìm **MikroTik Extended** (có sẵn trong kho mặc định, không cần thêm repo). Khởi động lại Home Assistant.
+
+**2. Thêm tích hợp.** Cài đặt → Thiết bị & dịch vụ → Thêm tích hợp → **MikroTik Extended**:
+- Host: IP của router (mặc định `192.168.88.1`).
+- Username và Password: tài khoản API bạn tạo ở bước 3.
+- Port: `0` (tự chọn 8728, hoặc 8729 nếu dùng SSL).
+- SSL Mode: `none` nếu chỉ dùng trong mạng nội bộ.
+
+Trong tuỳ chọn của tích hợp, bật **Port switches** để card thấy các cổng.
+
+**3. Tạo tài khoản API trên MikroTik.** Chạy trong Terminal (WinBox hoặc SSH):
+
+```
+/user group add name=ha-api policy=read,write,api,reboot,policy,test,sensitive
+/user add name=homeassistant group=ha-api password="MAT_KHAU_DAI" address=IP_HA/32
+```
+
+- `MAT_KHAU_DAI`: tạo trên máy bạn, ví dụ `openssl rand -base64 24`. Đừng dán mật khẩu vào chat hay vào file công khai.
+- `IP_HA/32`: IP của máy chạy Home Assistant, để chỉ máy đó đăng nhập được.
+- `write` cần để tích hợp tự cấu hình switch và Kid Control; `reboot` cần cho nút khởi động lại. Thiếu quyền nào thì tính năng đó không dùng được, các cảm biến vẫn đọc được.
+
+**4. Mở API chỉ cho Home Assistant.**
+
+```
+/ip service set api address=IP_HA/32 disabled=no
+```
+
+**Yêu cầu:** Home Assistant 2024.11 trở lên, RouterOS 7 trở lên.
+
+**Card đọc được gì từ MikroTik Extended:**
+- Cổng ethernet và PPPoE: trạng thái, tên RouterOS, loại. Cổng có tên chứa `WAN` (ví dụ `WAN-ETHER1`) được coi là cổng ra Internet và không hiện như cổng nội bộ.
+- Đường hầm WireGuard: trạng thái, tổng RX/TX, thời gian bắt tay gần nhất. Giao diện WireGuard không hiện trong danh sách cổng.
+- Thiết bị: các `device_tracker` có thuộc tính MAC, IP, interface.
+
+**Lưu ý:** tên thực thể HA (ví dụ `ether2`) có thể khác tên RouterOS (ví dụ `ether3`). Card khớp cổng theo cả hai.
+
+## Cài tích hợp ZTE (tuỳ chọn, cho bộ phát ZTE E2633)
+Cần nếu muốn card hiện máy nào vào WiFi ZTE, băng tần và tín hiệu. Dùng bản fork có hỗ trợ E2633:
+
+1. HACS → Custom repositories → `https://github.com/TriTue2011/zte_tracker` → loại *Integration* → cài → khởi động lại Home Assistant (cần Home Assistant 2025.1 trở lên).
+2. Cài đặt → Thiết bị & dịch vụ → Thêm tích hợp → **ZTE router tracker**: nhập IP bộ phát, tên đăng nhập, mật khẩu quản trị và chọn model **E2633**.
+3. Tích hợp tạo cảm biến `sensor.zte_router_<ip>` và `sensor.zte_router_<ip>_connected_devices` (thuộc tính `clients`: `mac`, `ip`, `name`, `band`, `rssi`, `mode`, `rx_rate`, `tx_rate`). IP viết dấu gạch dưới, ví dụ `192.168.1.1` → `sensor.zte_router_192_168_1_1_connected_devices`.
+4. Khai vào card (xem `examples/2-chi-zte.yaml` hoặc `examples/3-mikrotik-va-zte.yaml`):
+```yaml
+access_points:
+  - name: ZTE WiFi
+    ips: [192.168.1.1]          # IP bộ phát: thông số của chính nó nằm ở tiêu đề hộp
+    clients_sensor: sensor.zte_router_192_168_1_1_connected_devices
+```
+Chưa thử các bước 1–2 trên Home Assistant thật của người khác; tích hợp chỉ đọc, sai mật khẩu thì tạm ngừng 30 phút để không khoá tài khoản.
 
 ## Cấu hình tối thiểu
 ```yaml
@@ -188,56 +247,3 @@ Bốn tệp trong thư mục [`examples/`](examples/), chép vào YAML của car
 
 ## Giấy phép
 MIT.
-
-## Cài đặt tự động với MikroTik Extended
-
-Card tự nhận các thực thể của tích hợp **MikroTik Extended**, không cần khai tiền tố hay tên cổng. Chỉ cần thêm card:
-
-```yaml
-type: custom:mikrotik-topo-lan-card
-```
-
-**1. Cài tích hợp.** Trong HACS, tìm **MikroTik Extended** (có sẵn trong kho mặc định, không cần thêm repo). Khởi động lại Home Assistant.
-
-**2. Thêm tích hợp.** Cài đặt → Thiết bị & dịch vụ → Thêm tích hợp → **MikroTik Extended**:
-- Host: IP của router (mặc định `192.168.88.1`).
-- Username và Password: tài khoản API bạn tạo ở bước 3.
-- Port: `0` (tự chọn 8728, hoặc 8729 nếu dùng SSL).
-- SSL Mode: `none` nếu chỉ dùng trong mạng nội bộ.
-
-Trong tuỳ chọn của tích hợp, bật **Port switches** để card thấy các cổng.
-
-**3. Tạo tài khoản API trên MikroTik.** Chạy trong Terminal (WinBox hoặc SSH):
-
-```
-/user group add name=ha-api policy=read,write,api,reboot,policy,test,sensitive
-/user add name=homeassistant group=ha-api password="MAT_KHAU_DAI" address=IP_HA/32
-```
-
-- `MAT_KHAU_DAI`: tạo trên máy bạn, ví dụ `openssl rand -base64 24`. Đừng dán mật khẩu vào chat hay vào file công khai.
-- `IP_HA/32`: IP của máy chạy Home Assistant, để chỉ máy đó đăng nhập được.
-- `write` cần để tích hợp tự cấu hình switch và Kid Control; `reboot` cần cho nút khởi động lại. Thiếu quyền nào thì tính năng đó không dùng được, các cảm biến vẫn đọc được.
-
-**4. Mở API chỉ cho Home Assistant.**
-
-```
-/ip service set api address=IP_HA/32 disabled=no
-```
-
-**Yêu cầu:** Home Assistant 2024.11 trở lên, RouterOS 7 trở lên.
-
-**Card đọc được gì từ MikroTik Extended:**
-- Cổng ethernet và PPPoE: trạng thái, tên RouterOS, loại. Cổng có tên chứa `WAN` (ví dụ `WAN-ETHER1`) được coi là cổng ra Internet và không hiện như cổng nội bộ.
-- Đường hầm WireGuard: trạng thái, tổng RX/TX, thời gian bắt tay gần nhất. Giao diện WireGuard không hiện trong danh sách cổng.
-- Thiết bị: các `device_tracker` có thuộc tính MAC, IP, interface.
-
-**Bộ phát WiFi ZTE (tuỳ chọn):** nếu có cảm biến `…_connected_devices` của tích hợp ZTE (xem thư mục `zte-e2633-ha` hoặc fork `zte_tracker`), khai thêm cổng cắm ZTE:
-
-```yaml
-type: custom:mikrotik-topo-lan-card
-zte_port: ether2   # tên cổng MikroTik nơi ZTE cắm, theo tên thực thể cổng
-```
-
-Không khai `zte_port` thì card không tự thêm bộ phát ZTE, vì không đoán được cổng.
-
-**Lưu ý:** tên thực thể HA (ví dụ `ether2`) có thể khác tên RouterOS (ví dụ `ether3`). Card khớp cổng theo cả hai.
