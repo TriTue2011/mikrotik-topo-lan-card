@@ -405,7 +405,7 @@ test('hộp chứa nhiều IP (tên tùy ý): thiết bị có tiền tố MAC k
   assert.equal(host.name, 'NAS');
   assert.equal(host.parent, 'sw-0');
   const guests = nut.filter((n) => n.guest);
-  assert.deepEqual(guests.map((g) => g.parent), ['host-0', 'host-0']);
+  assert.deepEqual(guests.map((g) => g.parent), ['sw-0', 'sw-0'], 'LXC/VM nối vào switch nguồn của host');
   assert.ok(!guests.some((g) => g.macs.includes('02:00:00:00:00:99')));
   const khongKhai = dungNut({ hosts: [{ name: 'NAS', ip: '172.16.10.5' }] }, [], may);
   assert.equal(khongKhai.filter((n) => n.guest).length, 0, 'không khai tiền tố thì không tự thêm');
@@ -425,6 +425,6 @@ test('hộp lồng nhiều tầng: hộp con khai tay lồng tiếp; máy có ti
   assert.equal(vm.parent, nas.key, 'VM docker nằm trong NAS');
   assert.equal(ct.parent, vm.key, 'Container nằm trong VM docker (tầng 3)');
   const guests = nut.filter((n) => n.guest);
-  assert.deepEqual(guests.map((g) => g.parent), [nas.key], 'Adguard là hộp con của NAS, một lần duy nhất');
+  assert.deepEqual(guests.map((g) => g.parent), ['sw-0'], 'Adguard nối vào switch nguồn của NAS, một lần duy nhất');
   assert.ok(!guests.some((g) => g.macs.includes('02:00:00:00:00:99')));
 });

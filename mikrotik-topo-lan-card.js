@@ -326,8 +326,10 @@ export function dungNut(cfg = {}, userNodes = [], clients = []) {
       const mac = macChuan(c && c.mac);
       if (!mac.startsWith(tien) || daNhan.has(mac)) continue;
       daNhan.add(mac);
+      // Nguồn của LXC/VM: guest_source (tên switch/bộ phát) nếu khai; không thì switch mà host đang nối vào.
+      const nguon = h.guest_source ? ((nut.find((n) => n.name === h.guest_source) || {}).key || khoa) : (cha || khoa);
       nut.push({ key: `${khoa}-${mac.replace(/:/g, '')}`, kind: KIND_SWITCH, name: String(c.name || c.ip || mac).slice(0, 60),
-        port: '', parent: khoa, macs: [mac], ips: [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', guest: true });
+        port: '', parent: nguon, macs: [mac], ips: [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', guest: true });
     }
   };
   (cfg.hosts || []).forEach((h, i) => {
@@ -592,22 +594,31 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const chuanCong = (x) => String(x || '').toLowerCase().replace(/\s+/g, '_').replace(/["\\]/g, '');
   const hienMay = cfg.show_clients !== false;
   // Nút switch/bộ phát: tên, số máy, máy của nó, rồi các nút con (ví dụ bộ phát WiFi nối dưới switch).
+  // Mỗi thiết bị là một hộp nhỏ riêng; nét đứt đi từ nguồn đã cài tới hộp đó.
+  const hopMay = (c, anchor) => `<div class="dev-hop" data-anchor="${anchor}" data-luu="0">${hangMay(c)}</div>`;
+  const nhomCua = (n) => nhomHien.find((x) => x.node && x.node.key === n.key);
   const nutCon = (n, inner = '') => {
-    const g = nhomHien.find((x) => x.node && x.node.key === n.key);
-    const hien = g && hienMay ? g.hien : [];
+    const g = nhomCua(n);
+    if (n.guest) {
+      const c = g && g.hien[0] ? g.hien[0] : { mac: n.macs[0], name: n.name, ip: '', online: true, interface: '', source: '' };
+      return hopMay(c, `n-${esc(n.key)}`);
+    }
     const sl = g ? g.clients.length : 0;
-    const con = nut.filter((x) => x.parent === n.key);
+    const rows = n.box && g && hienMay ? g.hien.map(hangMay).join('') : '';
     return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}${n.box ? ' hop-chua' : ''}" data-anchor="n-${esc(n.key)}" data-luu="0">
       <div class="tieu-nhom nhom-may">${n.kind === KIND_AP ? chamTrangThai(n.online) : ''}${n.kind === KIND_AP ? '📶 ' : '⇄ '}${esc(n.name)} (${esc(sl)})${n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : ''}</div>
-      ${hien.map(hangMay).join('')}
+      ${rows}
       ${inner}
     </div>`;
   };
-  // Cây: mỗi nút là một hộp; cấp dưới nằm ở cột bên phải. Riêng hộp chứa (box): các hộp con nằm TRONG hộp đó.
+  // Cây: hộp cha bên trái; cấp dưới và thiết bị gắn vào nó nằm cột bên phải, mỗi thiết bị một hộp nhỏ.
   const treeNode = (n) => {
-    const con = nut.filter((x) => x.parent === n.key);
-    if (n.box) return `<div class="tree-hang">${nutCon(n, con.map((c) => treeNode(c)).join(''))}</div>`;
-    return `<div class="tree-hang">${nutCon(n)}${con.length ? `<div class="tree-con">${con.map(treeNode).join('')}</div>` : ''}</div>`;
+    if (n.guest) return `<div class="tree-hang">${nutCon(n)}</div>`;
+    const kids = nut.filter((x) => x.parent === n.key);
+    const g = nhomCua(n);
+    const devs = (!n.box && g && hienMay) ? g.hien.map((c) => hopMay(c, `dev-${esc(macChuan(c.mac))}`)) : [];
+    const phai = [...kids.map(treeNode), ...devs].join('');
+    return `<div class="tree-hang">${nutCon(n)}${phai ? `<div class="tree-con">${phai}</div>` : ''}</div>`;
   };
   // Một nhánh = một cổng MikroTik, bên phải là các nút cắm vào cổng đó.
   const nhanhCong = (pt) => {
@@ -661,6 +672,7 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .cay{position:relative;display:grid;grid-template-columns:minmax(300px,1fr) minmax(0,3fr);gap:24px;align-items:start}
 .tree-hang{display:flex;gap:16px;align-items:flex-start;margin-bottom:10px}
 .nut-con.hop-chua>.nut-con{margin-top:8px}
+.dev-hop{border:1px solid var(--divider-color,#444);border-radius:10px;margin-bottom:6px}
 .tree-con{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
 .nut-con{border:1px solid var(--divider-color,#444);border-radius:12px;padding:8px 10px}
 .nut-con .nhom-may{margin:0 0 6px}
@@ -899,7 +911,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         duong.push(`<path d="M${p.x},${p.y} C${mx},${p.y} ${mx},${q.y} ${q.x},${q.y}" stroke-width="${rong.toFixed(2)}" class="${lop}" style="${giay ? `animation-duration:${giay.toFixed(2)}s` : ''}"/>`);
       };
       noi(tim('isp'), tim('router'));
-      const { nut } = phanNhom(this._ui.clients || [], this._cfg, {}, this._hass ? this._hass.states : {}, this._ui.nodes);
+      const { nut, nhom } = phanNhom(this._ui.clients || [], this._cfg, {}, this._hass ? this._hass.states : {}, this._ui.nodes);
       for (const n of nut) {
         const anh = nut.filter((x) => x.parent && x.parent === n.parent).indexOf(n) % 4;
         // Máy con (LXC/VM) nối bằng nét đứt từ THIẾT BỊ NGUỒN (dòng của máy host trong hộp cha), không từ mép hộp.
@@ -907,6 +919,13 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         const cha = n.parent ? nut.find((x) => x.key === n.parent) : null;
         if (cha && cha.box && tu) { const nguon = tu.querySelector(':scope > .hang.may'); if (nguon) tu = nguon; }
         noi(tu, tim(`n-${n.key}`), n.parent ? `nd${anh < 0 ? 0 : anh}` : '');
+      }
+      for (const g of nhom) {
+        if (!g.node || g.node.guest || g.node.box) continue;
+        g.clients.forEach((c, k) => {
+          const el = tim(`dev-${macChuan(c.mac)}`);
+          if (el) noi(tim(`n-${g.node.key}`), el, `nd${k % 4}`);
+        });
       }
       cay.querySelectorAll('[data-anchor^="cong-"], [data-anchor^="ham-"]').forEach((el) => noi(tim('router'), el));
       svg.innerHTML = duong.join('');
