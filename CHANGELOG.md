@@ -1,5 +1,9 @@
 # Lịch sử thay đổi
 
+## 0.4.3
+- **Nguồn thiết bị trong cài đặt**: tab Thiết bị của trình sửa có ô chọn nguồn cho từng thiết bị, lưu vào `device_sources`. Bỏ ô chọn trên card.
+- `device_sources` được ưu tiên hơn `default_source`.
+
 ## 0.4.2
 - **Chọn nguồn cho từng thiết bị** bằng ô chọn trên dòng (thay nút 📶); lựa chọn lưu theo người dùng HA.
 - **`default_source`**: thiết bị có dây chưa có nguồn vào switch/bộ phát khai sẵn.
