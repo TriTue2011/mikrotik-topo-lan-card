@@ -902,7 +902,11 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       const { nut } = phanNhom(this._ui.clients || [], this._cfg, {}, this._hass ? this._hass.states : {}, this._ui.nodes);
       for (const n of nut) {
         const anh = nut.filter((x) => x.parent && x.parent === n.parent).indexOf(n) % 4;
-        noi(n.parent ? tim(`n-${n.parent}`) : (n.port ? timCong(n.port) : null), tim(`n-${n.key}`), n.parent ? `nd${anh < 0 ? 0 : anh}` : '');
+        // Máy con (LXC/VM) nối bằng nét đứt từ THIẾT BỊ NGUỒN (dòng của máy host trong hộp cha), không từ mép hộp.
+        let tu = n.parent ? tim(`n-${n.parent}`) : (n.port ? timCong(n.port) : null);
+        const cha = n.parent ? nut.find((x) => x.key === n.parent) : null;
+        if (cha && cha.box && tu) { const nguon = tu.querySelector(':scope > .hang.may'); if (nguon) tu = nguon; }
+        noi(tu, tim(`n-${n.key}`), n.parent ? `nd${anh < 0 ? 0 : anh}` : '');
       }
       cay.querySelectorAll('[data-anchor^="cong-"], [data-anchor^="ham-"]').forEach((el) => noi(tim('router'), el));
       svg.innerHTML = duong.join('');
