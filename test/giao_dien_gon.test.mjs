@@ -39,3 +39,9 @@ test('tinhDoiVe: nhịp vẽ tối thiểu 250 ms, mặc định 1 giây', () =>
   assert.equal(tinhDoiVe(5000, 4900, 50), 150);        // refresh_ms nhỏ hơn 250 bị nâng lên 250
   assert.equal(tinhDoiVe(5000, 4000, 3000), 2000);
 });
+
+test('card ghi phiên bản vào console khi nạp (để kiểm bản đang chạy)', async () => {
+  const fs = await import('node:fs');
+  const nguon = fs.readFileSync(new URL('../mikrotik-topo-lan-card.js', import.meta.url), 'utf8');
+  assert.ok(/console\.info\(`%c MIKROTIK-TOPO-LAN-CARD %c v\$\{VERSION\}/.test(nguon));
+});

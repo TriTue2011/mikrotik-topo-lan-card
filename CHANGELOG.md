@@ -1,5 +1,8 @@
 # Lịch sử thay đổi
 
+## 0.8.4
+- Ghi phiên bản vào console trình duyệt (`MIKROTIK-TOPO-LAN-CARD v0.8.4`) để kiểm bản đang chạy; trình duyệt và app Home Assistant hay giữ bản cũ trong bộ nhớ đệm sau khi HACS cập nhật.
+
 ## 0.8.3
 - **Đầu card gọn**: bỏ chip tốc độ tổng (hộp MikroTik đã có tốc độ WAN), bỏ ô tìm kiếm, bỏ dòng «Thiết bị (n)». Số thiết bị hiện cạnh chữ «MikroTik» trong hộp.
 - **Nhẹ hơn trên thiết bị yếu**: vẽ lại tối đa mỗi `refresh_ms` (mặc định 1 giây) thay vì mỗi lần Home Assistant báo đổi bất kỳ thực thể nào; không vẽ khi card ngoài màn hình hoặc tab ẩn

@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.8.3';
+export const VERSION = '0.8.4';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -1464,6 +1464,8 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
 
   if (!customElements.get('mikrotik-topo-lan-card')) customElements.define('mikrotik-topo-lan-card', MikrotikTopoLanCard);
   if (!customElements.get('mikrotik-topo-lan-card-editor')) customElements.define('mikrotik-topo-lan-card-editor', MikrotikTopoLanCardEditor);
+  // Ghi phiên bản vào console (như các card khác): để biết trình duyệt/app đang chạy bản nào, tránh nhầm với bản cũ còn trong bộ nhớ đệm.
+  console.info(`%c MIKROTIK-TOPO-LAN-CARD %c v${VERSION} `, 'color:#fff;background:#03a9f4;font-weight:700', 'color:#03a9f4;font-weight:700');
   window.customCards = window.customCards || [];
   window.customCards.push({
     type: 'mikrotik-topo-lan-card', name: 'MikroTik Topo LAN Card',
