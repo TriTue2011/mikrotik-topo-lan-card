@@ -88,15 +88,13 @@ test('gán thiết bị vào bộ phát WiFi (ZTE): theo MAC cấu hình, theo I
   assert.ok(sau.nhom.find((g) => g.name === 'LAN').clients.some((c) => c.name === 'C'));
 });
 
-test('hiển thị: nhóm ZTE có tiêu đề + nút gán; giới hạn số thiết bị; tìm kiếm', () => {
+test('hiển thị: nhóm ZTE có tiêu đề + nút gán; giới hạn số thiết bị', () => {
   const cfg = { access_points: [{ name: 'ZTE WiFi', port: 'ether2', macs: [] }], client_limit: 5 };
   const ui = { aps: [{ i: 0, name: 'ZTE WiFi' }], gan: {}, states };
   const html = renderHtml(discover(states, cfg), cfg, ui);
   assert.match(html, /ZTE WiFi \(0\)/);
   assert.doesNotMatch(html, /nguon-chon/, 'ô chọn nguồn nằm trong cài đặt, không trên card');
   assert.match(html, /Xem thêm/);
-  const hit = renderHtml(discover(states, cfg), cfg, { ...ui, search: 'Thiết bị 07' });
-  assert.match(hit, /Thiết bị 07/); assert.ok(!/Thiết bị 08/.test(hit));
   const khong = renderHtml(discover(states, { ...cfg, show_clients: false }), { ...cfg, show_clients: false }, ui);
   assert.ok(!/cot-may/.test(khong));
 });

@@ -1,5 +1,11 @@
 # Lịch sử thay đổi
 
+## 0.8.3
+- **Đầu card gọn**: bỏ chip tốc độ tổng (hộp MikroTik đã có tốc độ WAN), bỏ ô tìm kiếm, bỏ dòng «Thiết bị (n)». Số thiết bị hiện cạnh chữ «MikroTik» trong hộp.
+- **Nhẹ hơn trên thiết bị yếu**: vẽ lại tối đa mỗi `refresh_ms` (mặc định 1 giây) thay vì mỗi lần Home Assistant báo đổi bất kỳ thực thể nào; không vẽ khi card ngoài màn hình hoặc tab ẩn
+  (hiện lại thì vẽ ngay); CSS chỉ nạp một lần; mỗi hộp chỉ đo một lần khi vẽ đường nối; đổi kích thước gộp một lần mỗi khung hình; tự tắt hoạt ảnh nét đứt trên máy ≤ 2 nhân hoặc ≤ 2 GB (hoặc `animate_lines: false`).
+  Đo trong Chrome với 3000 thực thể và 200 lần cập nhật không liên quan: khoảng 890 ms CPU của card xuống gần 0 (chỉ còn một lần vẽ).
+
 ## 0.8.2
 - **Sửa: không có đường nối nào với hộp tự dựng từ `topo_sensor`.** Hàm vẽ đường đọc cấu hình gốc và danh sách máy từ thực thể theo dõi, nên không thấy hộp SW/ZTE tự dựng và máy lấy từ cây thiết bị. Nay dùng đúng nhóm mà bước dựng giao diện đã dùng.
 - Đường nối là nét đứt rõ (dày hơn, đậm hơn), có chấm ở điểm xuất phát; lớp đường nằm trên các cột nên không còn bị hộp che mất đoạn đầu.

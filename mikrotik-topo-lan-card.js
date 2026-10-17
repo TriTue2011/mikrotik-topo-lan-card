@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.8.2';
+export const VERSION = '0.8.3';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -295,6 +295,15 @@ export function autoCauHinh(states = {}, cfg = {}) {
 export function macRiengTu(mac) {
   const m = /^([0-9a-f]{2})[:-]/i.exec(String(mac || ''));
   return !!m && (parseInt(m[1], 16) & 2) === 2;
+}
+
+/** Số mili giây phải chờ nữa mới được vẽ lại (0 = vẽ ngay). `khoang` mặc định 1000 ms, không nhỏ hơn 250 ms. */
+/** Máy yếu (≤ 2 nhân hoặc ≤ 2 GB): không chạy hoạt ảnh nét đứt, vì SVG phải vẽ lại mỗi khung hình. */
+const mayYeu = () => typeof navigator !== 'undefined' && ((navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2);
+
+export function tinhDoiVe(bayGio, lanCuoi, khoang) {
+  const k = Math.max(250, Number(khoang) || 1000);
+  return Math.max(0, k - (bayGio - (Number(lanCuoi) || 0)));
 }
 
 const macChuan = (m) => String(m || '').toLowerCase().replace(/-/g, ':');
@@ -678,7 +687,7 @@ const CHU = {
     sectVpn: 'VPN WireGuard', loai: 'loại', ngat: 'ngắt', lenCuoi: 'lên lần cuối', updateNew: 'có bản mới', wired: 'Máy có dây', wireless: 'Máy WiFi', noWan: 'Chưa có WAN',
     subTong: 'Tổng quan', subWan: 'WAN', subBridge: 'Bridge LAN', dangChay: 'đang chạy', ngung: 'ngưng', isp: 'Nhà mạng', cong: 'Cổng', ipAddr: 'Địa chỉ IP',
     mtuLbl: 'MTU', lastUpLbl: 'Lên lần cuối', nowRate: 'Tốc độ hiện tại', totalTx: 'Tổng đã truyền', linkDowns: 'Lần rớt link', bridgeNote: 'Các cổng trong bridge cùng một mạng LAN: thiết bị cắm vào các cổng này giao tiếp được với nhau, trừ khi có VLAN hoặc bộ lọc chặn.', chonCong: 'Cổng trong bridge', chuaCo: 'Chưa có dữ liệu', kieu: 'Kiểu', chiTietCong: 'Chi tiết',
-    search: 'Tìm tên, IP, MAC…', more: 'Xem thêm', none: 'Không có dữ liệu — kiểm tra tiền tố (prefix) và tích hợp MikroTik.',
+    more: 'Xem thêm', none: 'Không có dữ liệu — kiểm tra tiền tố (prefix) và tích hợp MikroTik.',
     up: 'lên', down: 'xuống', online: 'đang kết nối', cpu: 'CPU', ram: 'RAM', uptime: 'Hoạt động', noClients: 'Chưa có thiết bị',
     connected: 'đã kết nối', disconnected: 'ngắt', assign: 'Gán vào', unassign: 'Bỏ gán', wifiHint: 'MAC riêng tư — thường là máy dùng WiFi',
     edit: 'Thêm switch / bộ phát WiFi', addTitle: 'Thêm nút vào sơ đồ', name: 'Tên', kind: 'Loại', kSwitch: 'Switch', kAp: 'Bộ phát WiFi',
@@ -692,7 +701,7 @@ const CHU = {
     sectVpn: 'VPN WireGuard', loai: 'type', ngat: 'down', lenCuoi: 'last up', updateNew: 'new version', wired: 'Wired devices', wireless: 'WiFi devices', noWan: 'No WAN',
     subTong: 'Overview', subWan: 'WAN', subBridge: 'Bridge LAN', dangChay: 'running', ngung: 'stopped', isp: 'ISP', cong: 'Port', ipAddr: 'IP address',
     mtuLbl: 'MTU', lastUpLbl: 'Last link up', nowRate: 'Current rate', totalTx: 'Total transferred', linkDowns: 'Link drops', bridgeNote: 'Ports in the bridge share one LAN: devices on these ports can reach each other unless VLANs or filters block it.', chonCong: 'Ports in bridge', chuaCo: 'No data', kieu: 'Type', chiTietCong: 'Details',
-    search: 'Search name, IP, MAC…', more: 'Show more', none: 'No data — check the prefix and the MikroTik integration.',
+    more: 'Show more', none: 'No data — check the prefix and the MikroTik integration.',
     up: 'up', down: 'down', online: 'online', cpu: 'CPU', ram: 'RAM', uptime: 'Uptime', noClients: 'No devices',
     connected: 'connected', disconnected: 'down', assign: 'Assign to', unassign: 'Unassign', wifiHint: 'Private MAC — usually a WiFi device',
     edit: 'Add switch / WiFi access point', addTitle: 'Add a node to the diagram', name: 'Name', kind: 'Type', kSwitch: 'Switch', kAp: 'WiFi access point',
@@ -747,12 +756,9 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const coDuLieu = !!(wan || ports.length || bridges.length || tunnels.length || clients.length || core.cpu != null || coHop);
   if (!coDuLieu) return `<ha-card><div class="vo">${esc(t.none)}</div></ha-card>`;
 
-  const tong = wan ? { rx: wan.rx, tx: wan.tx } : ports.reduce((s, p) => ({ rx: s.rx + p.rx, tx: s.tx + p.tx }), { rx: 0, tx: 0 });
   const online = clients.filter((c) => c.online).length;
-  const loc = String(ui.search || '').trim().toLowerCase();
   let ds = [...clients, ...thietBiNguonThieu(cfg, ui.states || {}, clients)];
   if (cfg.hide_offline_clients) ds = ds.filter((c) => c.online);
-  if (loc) ds = ds.filter((c) => `${c.name} ${c.ip} ${c.mac}`.toLowerCase().includes(loc));
   const gioiHan = Math.max(5, Number(ui.limit || cfg.client_limit || 30));
   // Gán tay cũ đã lưu trong trình duyệt không còn dùng; nguồn của thiết bị khai bằng device_sources trong cấu hình.
   const { nut, nhom } = phanNhom(ds, cfg, {}, ui.states || {}, ui.nodes || []);
@@ -904,7 +910,6 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
 
   return `<ha-card>
     <div class="dau"><div class="td">${esc(tieuDe)}</div>
-      ${tong.rx > 0 ? `<div class="chip"><b>↓</b>${esc(fmtRate(tong.rx))}</div>` : ''}${tong.tx > 0 ? `<div class="chip"><b>↑</b>${esc(fmtRate(tong.tx))}</div>` : ''}
       ${clients.length ? `<div class="chip">${esc(online)}/${esc(clients.length)} ${esc(t.online)}</div>` : ''}
       ${cfg.show_clients === false ? '' : `<button class="chip nut-sua" data-act="sua" aria-pressed="${ui.edit ? 'true' : 'false'}" title="${esc(t.edit)}" aria-label="${esc(t.edit)}">✎</button>`}</div>
     ${bang}
@@ -912,7 +917,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
       <svg class="duong" aria-hidden="true"></svg>
       ${coMik ? `<div class="cot cot-router">
         <div class="nut-node chinh" data-anchor="router">
-          <div class="nt"><span>${esc(tenRouter)}</span></div>
+          <div class="nt"><span>${esc(tenRouter)}</span>${ds.length ? ` <span class="phu">(${esc(ds.length)})</span>` : ''}</div>
           <div class="phu">${core.cpu != null ? `${esc(t.cpu)} ${esc(core.cpu)}%` : ''} ${core.ram != null ? `· ${esc(t.ram)} ${esc(core.ram)}%` : ''}</div>
           <div class="phu">${core.uptime ? `${esc(t.uptime)} ${esc(fmtUptime(core.uptime, now))}` : ''} ${core.version ? `· RouterOS ${esc(core.version)}` : ''}</div>
         ${renderRouterBox(model, cfg, ui, t, hangCong)}
@@ -920,8 +925,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
         ${vpnHtml}
       </div>` : ''}
       <div class="cot cot-cong">
-        <div class="tieu-nhom">${esc(t.clients)} (${esc(ds.length)})</div>
-        <input class="tim" type="search" placeholder="${esc(t.search)}" value="${esc(ui.search || '')}" aria-label="${esc(t.search)}">
+        ${coMik ? '' : `<div class="tieu-nhom">${esc(t.clients)} (${esc(ds.length)})</div>`}
         ${ports.map(nhanhCong).join('')}
         ${mocCon.map(treeNode).join('')}
         ${chuaGan.length ? `<div class="nut-con sw"><div class="tieu-nhom nhom-may">LAN (${esc(chuaGan.reduce((x, g) => x + g.clients.length, 0))})</div>${chuaGan.map((g) => g.hien.map(hangMay).join('')).join('')}</div>` : ''}
@@ -934,6 +938,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
 
 export const CSS = `
 :host{display:block}
+.goc{display:contents}
 ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .vo{padding:16px;color:var(--secondary-text-color)}
 .dau{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:10px}
@@ -986,7 +991,7 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .cham{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#9e9e9e}
 .cham.ok{background:var(--success-color,#43a047)}
 .cham.loi{background:var(--error-color,#e53935)}
-.tim,.sua input[type=text],.sua select{width:100%;box-sizing:border-box;padding:6px 10px;border-radius:8px;border:1px solid var(--divider-color,#ddd);background:var(--card-background-color,#fff);color:inherit;font:inherit;font-size:13px}
+.sua input[type=text],.sua select{width:100%;box-sizing:border-box;padding:6px 10px;border-radius:8px;border:1px solid var(--divider-color,#ddd);background:var(--card-background-color,#fff);color:inherit;font:inherit;font-size:13px}
 .them{align-self:flex-start;padding:5px 12px;border-radius:8px;border:1px solid var(--divider-color,#ddd);background:none;color:var(--primary-color);cursor:pointer;font:inherit;font-size:12px}
 .phu-nut{color:var(--secondary-text-color)}
 .sua{display:flex;flex-direction:column;gap:8px;padding:10px 12px;margin-bottom:12px;border:1px dashed var(--divider-color,#ccc);border-radius:12px;max-width:520px}
@@ -1032,8 +1037,9 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       super();
       this.attachShadow({ mode: 'open' });
       this._cfg = {};
-      this._ui = { search: '', limit: 0, gan: {}, nodes: [], states: {}, edit: false, form: { name: '', kind: 'switch', parent: '', tuDong: false } };
+      this._ui = { limit: 0, gan: {}, nodes: [], states: {}, edit: false, form: { name: '', kind: 'switch', parent: '', tuDong: false } };
       this._chuKy = ''; this._hass = null; this._daNapUserData = false;
+      this._lanVe = 0; this._hen = null; this._can = false; this._hienThi = true; this._goc = null;
     }
 
     setConfig(cfg) {
@@ -1055,7 +1061,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
     set hass(h) {
       this._hass = h;
       if (!this._daNapUserData && h && typeof h.callWS === 'function') this._napUserData();
-      this._ve();
+      this._henVe();
     }
 
     getCardSize() { return 8; }
@@ -1091,15 +1097,26 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       this._ui.form = { name: q('.o-ten').value, kind: q('.o-loai').value, parent: q('.o-cha').value, tuDong: q('.o-tudong').checked };
     }
 
+    /** Home Assistant gán `hass` mỗi khi BẤT KỲ thực thể nào đổi: chỉ vẽ lại tối đa mỗi `refresh_ms` (mặc định 1 giây) và chỉ khi card đang được xem. */
+    _henVe() {
+      if (!this._dangXem()) { this._can = true; return; }
+      const doi = tinhDoiVe(Date.now(), this._lanVe, this._cfg.refresh_ms);
+      if (doi <= 0) { this._ve(); return; }
+      if (!this._hen) this._hen = setTimeout(() => { this._hen = null; if (this._dangXem()) this._ve(); else this._can = true; }, doi);
+    }
+
+    _dangXem() { return this._hienThi !== false && !(typeof document !== 'undefined' && document.hidden); }
+
     _ve(ep = false) {
       if (!this._hass) return;
+      this._lanVe = Date.now(); this._can = false;
       const cfgHl = autoCauHinh(this._hass.states, this._cfg);
       const model = discover(this._hass.states, cfgHl);
       this._ui.clients = model.clients;
       this._ui.cfgHl = cfgHl;           // cấu hình đã thêm hộp tự dựng từ cây: nơi vẽ đường và nút «gán» phải dùng đúng bản này
       this._ui.states = this._hass.states;
       this._ui.entities = this._hass.entities || {};
-      const chuKy = JSON.stringify([model, this._ui.search, this._ui.limit, this._cfg.language, this._ui.gan, this._ui.nodes, this._ui.edit,
+      const chuKy = JSON.stringify([model, this._ui.limit, this._cfg.language, this._ui.gan, this._ui.nodes, this._ui.edit,
         (this._cfg.access_points || []).map((a) => (a && a.entity && this._hass.states[a.entity] ? this._hass.states[a.entity].state : '')),
         [this._cfg, ...(this._cfg.switches || []), ...(this._cfg.access_points || [])]
           .map((x) => (x && x.mac_sensor && this._hass.states[x.mac_sensor] ? JSON.stringify(this._hass.states[x.mac_sensor].attributes) : '')),
@@ -1110,20 +1127,18 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         thongTinWifi(cfgHl, this._hass.states, this._ui.entities)]);
       if (!ep && chuKy === this._chuKy) return;
       this._chuKy = chuKy;
-      const dangTim = this.shadowRoot.activeElement && this.shadowRoot.activeElement.classList.contains('tim');
-      const vt = dangTim ? this.shadowRoot.activeElement.selectionStart : 0;
       this._docForm();
-      this.shadowRoot.innerHTML = `<style>${CSS}</style>${renderHtml(model, cfgHl, this._ui)}`;
+      if (!this._goc) {                 // CSS chỉ nạp một lần; mỗi lần vẽ chỉ thay phần nội dung
+        this.shadowRoot.innerHTML = `<style>${CSS}</style><div class="goc"></div>`;
+        this._goc = this.shadowRoot.querySelector('.goc');
+      }
+      this._goc.innerHTML = renderHtml(model, cfgHl, this._ui);
       this._gan();
-      const o = this.shadowRoot.querySelector('.tim');
-      if (o && dangTim) { o.focus(); try { o.setSelectionRange(vt, vt); } catch (e) { /* bỏ qua */ } }
       requestAnimationFrame(() => this._veDuong());
     }
 
     _gan() {
       const r = this.shadowRoot;
-      const tim = r.querySelector('.tim');
-      if (tim) tim.addEventListener('input', () => { this._ui.search = tim.value; this._ui.limit = 0; this._ve(true); });
       const them = r.querySelector('[data-act="more"]');
       if (them) them.addEventListener('click', () => { this._ui.limit = (this._ui.limit || this._cfg.client_limit || 30) + 30; this._ve(true); });
       const sua = r.querySelector('[data-act="sua"]');
@@ -1174,19 +1189,24 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
     _veDuong() {
       const cay = this.shadowRoot.querySelector('.cay');
       const svg = this.shadowRoot.querySelector('.duong');
-      if (!cay || !svg || getComputedStyle(svg).display === 'none') return;
+      if (!cay || !svg || !this._dangXem() || getComputedStyle(svg).display === 'none') return;
       const goc = cay.getBoundingClientRect();
+      const hinh = new Map();                         // mỗi phần tử chỉ đo một lần (một hộp là nguồn của nhiều đường)
       const diem = (el, canh) => {
-        const r = el.getBoundingClientRect();
+        let r = hinh.get(el);
+        if (!r) { r = el.getBoundingClientRect(); hinh.set(el, r); }
         return { x: (canh === 'phai' ? r.right : r.left) - goc.left, y: r.top + r.height / 2 - goc.top };
       };
-      const tim = (a) => cay.querySelector(`[data-anchor="${a}"]`);
+      const neo = new Map();
+      cay.querySelectorAll('[data-anchor]').forEach((e) => neo.set(e.dataset.anchor, e));
+      const tim = (a) => neo.get(a) || null;
       // Tên RouterOS (ether2) là tên dùng trong cấu hình và bảng MAC: khớp đúng tên trước, rồi mới tới id thực thể.
       const timCong = (ten) => {
         const k = String(ten || '').toLowerCase().replace(/\s+/g, '_').replace(/["\\]/g, '');
         if (!k) return null;
         return cay.querySelector(`[data-name="${k}"]`) || cay.querySelector(`[data-ids~="${k}"]`);
       };
+      const dongChay = this._cfg.animate_lines !== false && !mayYeu();      // máy yếu hoặc animate_lines:false: nét đứt tĩnh, không chạy
       const duong = [];
       const noi = (tu, den, nd = '') => {
         if (!tu || !den) return;
@@ -1194,7 +1214,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         if (q.x <= p.x) return;          // đích không nằm bên phải nguồn (ví dụ cổng nằm trong hộp router): không có gì để nối
         const luu = Number(den.dataset.luu || tu.dataset.luu || 0);
         const rong = luu > 0 ? Math.min(4, 1.8 + Math.log10(luu + 1) / 2.2) : 1.8;
-        const giay = !nd && luu > 0 ? Math.max(0.5, 4 - Math.log10(luu + 1) * 0.5) : 0;
+        const giay = dongChay && !nd && luu > 0 ? Math.max(0.5, 4 - Math.log10(luu + 1) * 0.5) : 0;
         const mx = (p.x + q.x) / 2;
         const lop = nd ? `nd ${nd}` : (giay ? 'chay' : 'nd nd0');       // không có lưu lượng: nét đứt tĩnh, không để nét liền mờ
         duong.push(`<path d="M${p.x},${p.y} C${mx},${p.y} ${mx},${q.y} ${q.x},${q.y}" stroke-width="${rong.toFixed(2)}" class="${lop}" style="${giay ? `animation-duration:${giay.toFixed(2)}s` : ''}"/>`);
@@ -1222,11 +1242,29 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
     }
 
     connectedCallback() {
-      this._ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => this._veDuong()) : null;
+      // Đổi kích thước: gộp về một lần vẽ đường mỗi khung hình
+      this._ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => {
+        if (this._rafDuong) return;
+        this._rafDuong = requestAnimationFrame(() => { this._rafDuong = 0; this._veDuong(); });
+      }) : null;
       if (this._ro) this._ro.observe(this);
+      // Card ngoài màn hình hoặc tab ẩn: không vẽ; hiện lại thì vẽ ngay bản mới nhất
+      this._io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((es) => {
+        this._hienThi = es.some((e) => e.isIntersecting);
+        if (this._hienThi && this._can) this._ve();
+      }) : null;
+      if (this._io) this._io.observe(this);
+      this._khiHienTab = () => { if (!document.hidden && this._can && this._hienThi !== false) this._ve(); };
+      document.addEventListener('visibilitychange', this._khiHienTab);
     }
 
-    disconnectedCallback() { if (this._ro) this._ro.disconnect(); }
+    disconnectedCallback() {
+      if (this._ro) this._ro.disconnect();
+      if (this._io) this._io.disconnect();
+      if (this._khiHienTab) document.removeEventListener('visibilitychange', this._khiHienTab);
+      if (this._hen) { clearTimeout(this._hen); this._hen = null; }
+      if (this._rafDuong) { cancelAnimationFrame(this._rafDuong); this._rafDuong = 0; }
+    }
   }
 
 

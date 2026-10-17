@@ -93,6 +93,8 @@ Card tự nhận WAN (cổng PPPoE/L2TP…), cổng, bridge, đường hầm Wir
 | `hide_ports` | | Danh sách id cổng/đường hầm cần ẩn |
 | `show_clients` | `true` | Hiện cột thiết bị |
 | `client_limit` | `30` | Số thiết bị hiện ban đầu (có nút «Xem thêm») |
+| `refresh_ms` | `1000` | Vẽ lại tối đa một lần mỗi chừng này mili giây (nhỏ nhất 250). Home Assistant báo `hass` mỗi khi BẤT KỲ thực thể nào đổi; tăng số này trên thiết bị yếu |
+| `animate_lines` | `true` | `false` tắt hoạt ảnh nét đứt chạy theo lưu lượng. Tự tắt trên máy ≤ 2 nhân hoặc ≤ 2 GB |
 | `hide_offline_clients` | `false` | Ẩn thiết bị đang ngắt |
 | `language` | `vi` | `vi` hoặc `en` |
 | `access_points` | | Bộ phát WiFi, xem dưới |
