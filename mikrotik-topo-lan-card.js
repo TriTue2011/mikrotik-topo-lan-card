@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.8.4';
+export const VERSION = '0.8.5';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -631,6 +631,9 @@ export function phanNhom(clients, cfg = {}, gan = {}, states = {}, userNodes = [
     let dich = null;
     if (nguonCfg[mac]) dich = nut.find((n) => !n.guest && n.name === nguonCfg[mac]) || null;
     if (!dich && mac in gan) { const g = gan[mac]; dich = theoKey.get(typeof g === 'number' ? `ap-${g}` : g) || null; }
+    // Khai báo CỤ THỂ thắng suy đoán theo cổng: LXC/VM theo `guest_mac_prefix` vào đúng nút khách của nó, chính máy host (theo IP) là chủ hộp to.
+    // Nếu để nguyên, `topo_sensor` đã gán cả hai vào hộp theo cổng (SW…) nên mỗi LXC hiện hai lần: một bản rỗng trong hộp host, một bản đầy đủ ở SW.
+    if (!dich) dich = nut.find((n) => n.guest && n.macs.includes(mac)) || nut.find((n) => n.box && c.ip && n.ips.includes(c.ip)) || null;
     if (!dich) dich = nut.find((n) => n.macs.includes(mac) || (c.ip && n.ips.includes(c.ip))) || null;
     if (!dich && macRiengTu(c.mac)) dich = nut.find((n) => n.kind === KIND_AP && n.tuDong && goc(n).sau.has(mac)) || null;
     if (!dich) dich = nut.find((n) => n.kind === KIND_SWITCH && n.sau.has(mac)) || null;

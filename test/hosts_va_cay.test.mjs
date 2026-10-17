@@ -35,3 +35,20 @@ test('khai hosts + guest_mac_prefix cùng topo_sensor: hộp Proxmox quay lại,
   const sw2 = nhom.find((g) => g.node && g.node.name === 'SW2');
   assert.ok(sw2.clients.some((c) => c.name === 'TV box'), 'máy thường vẫn ở SW2');
 });
+
+test('mỗi LXC và máy host chỉ hiện MỘT lần (không trùng giữa hộp Proxmox và nhóm theo cổng)', () => {
+  const c = autoCauHinh(states, cfg({ hosts: [{ name: 'Proxmox', ip: '192.168.88.100', switch: 'SW2', guest_mac_prefix: 'bc:24:11' }] }));
+  const ui = { states };
+  const html = renderHtml(discover(states, c), c, ui);
+  for (const ten of ['Proxmox', 'Adguard', 'lxc-chatgpt', 'TV box']) {
+    assert.equal((html.match(new RegExp(ten, 'g')) || []).length, 1, `«${ten}» phải hiện đúng một lần`);
+  }
+  const sw2 = ui.nhomVe.nhom.find((g) => g.node && g.node.name === 'SW2');
+  assert.deepEqual(sw2.clients.map((x) => x.name), ['TV box'], 'nhóm theo cổng chỉ còn máy thường');
+  // Nút khách mang bản ĐẦY ĐỦ của thiết bị (có IP), không phải bản rỗng dựng từ MAC.
+  const adguard = ui.nhomVe.nut.find((n) => n.guest && n.name === 'Adguard');
+  assert.ok(adguard, 'có nút khách Adguard');
+  const g = ui.nhomVe.nhom.find((x) => x.node === adguard);
+  assert.equal(g.clients.length, 1);
+  assert.equal(g.clients[0].ip, '192.168.88.10');
+});

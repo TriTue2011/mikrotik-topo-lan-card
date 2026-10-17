@@ -1,5 +1,8 @@
 # Lịch sử thay đổi
 
+## 0.8.5
+- **Sửa: LXC/VM và máy host hiện hai lần khi dùng `hosts` cùng `topo_sensor`.** `topo_sensor` đã xếp các máy vào hộp theo cổng nên chiếm chỗ trước quy tắc `guest_mac_prefix` và `ip` của hộp host: hộp host chỉ nhận một bản rỗng (chỉ MAC), bản đầy đủ nằm lại ở hộp cổng. Nay khai báo cụ thể (LXC theo tiền tố MAC, máy host theo IP) thắng suy đoán theo cổng; mỗi máy hiện một lần, đầy đủ IP và tốc độ.
+
 ## 0.8.4
 - Ghi phiên bản vào console trình duyệt (`MIKROTIK-TOPO-LAN-CARD v0.8.4`) để kiểm bản đang chạy; trình duyệt và app Home Assistant hay giữ bản cũ trong bộ nhớ đệm sau khi HACS cập nhật.
 
