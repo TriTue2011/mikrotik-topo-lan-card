@@ -1,5 +1,14 @@
 # Lịch sử thay đổi
 
+## 0.5.0
+- **Cấu hình đa dụng**: thông số lấy từ trạng thái hoặc thuộc tính của bất kỳ thực thể nào.
+  - `sources`: danh sách thiết bị từ thuộc tính (danh sách đối tượng có `map`, hoặc chuỗi tách bằng `separator` và `pattern` regex có nhóm tên).
+  - `fields` (hộp) và `device_fields` (thiết bị): `entity`, `attribute`, `extract`, `unit`, `template`, `label`.
+- **Thông số không có dữ liệu thì ẩn hẳn**, không chiếm chỗ trong card hay hộp; cấu hình sai (regex hỏng) chỉ làm trường đó ẩn.
+- Bỏ ảnh hưởng của gán tay cũ đã lưu trong trình duyệt (dùng `device_sources`).
+- Cấu hình chỉ có hộp (switch, bộ phát, host) vẫn hiển thị.
+- Bố cục khổ điện thoại: xếp dọc, không tràn ngang.
+
 ## 0.4.4
 - **Router ZTE tự nằm trong hộp ZTE WiFi**: IP lấy từ thuộc tính `host` của cảm biến chính, không còn hiện trong LAN.
 - **TX/RX của thiết bị WiFi qua ZTE** hiện như cổng (↓ ↑ và thanh), tách khỏi băng tần, RSSI và chế độ.
