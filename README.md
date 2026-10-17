@@ -54,6 +54,18 @@ switches:
 `port_names` (ví dụ `{ ether2: SW1 }`) đổi **cả nhãn cổng trong hộp MikroTik**; nếu muốn giữ tên cổng gốc thì dùng `switches` như trên.
 Hộp anh đã khai (`switches`, `access_points`) được giữ nguyên, card chỉ **thêm hộp còn thiếu**, không tạo trùng.
 
+**Đã có cấu hình cũ? Đừng thay bằng cấu hình tối thiểu.** Chỉ **thêm** dòng `topo_sensor` vào cấu hình đang dùng; các khối anh đã khai (ví dụ `hosts` cho Proxmox/LXC, `access_points`, `device_names`, `device_sources`) vẫn chạy cùng `topo_sensor`. Thay hẳn bằng cấu hình tối thiểu sẽ làm **mất các hộp tự khai** như Proxmox:
+```yaml
+type: custom:mikrotik-topo-lan-card
+prefix: mikrotik_router
+topo_sensor: sensor.mikrotik_router_cay_thiet_bi
+switches:
+  - { name: SW1, port: ether2 }
+  - { name: SW2, port: ether3 }
+hosts:                               # hộp Proxmox: máy có MAC bắt đầu bằng guest_mac_prefix (LXC/VM) nằm trong hộp
+  - { name: Proxmox, ip: 192.168.88.100, switch: SW2, guest_mac_prefix: "bc:24:11" }
+```
+
 ## Đọc sơ đồ
 - **Cột trái, hộp MikroTik**: tên router kèm **số thiết bị** `(n)`, CPU/RAM, thời gian chạy; hộp *Internet* (cổng WAN, tốc độ ↓↑); hộp *bridge* chứa các cổng với tốc độ, chấm xanh = đang nối, đỏ = ngắt.
 - **Cột phải**: hộp theo cổng (switch) hoặc bộ phát WiFi, và từng thiết bị bên trong: tên, băng tần, tín hiệu (dBm), tốc độ ↓↑, MAC, IP. Chấm `◌` cạnh thiết bị = MAC «riêng tư» (địa chỉ ngẫu nhiên của điện thoại).
