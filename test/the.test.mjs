@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh, toBytes, fmtBytes, detectPrefix } from '../mikrotik-topo-lan-card.js';
+import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh, toBytes, fmtBytes, detectPrefix, capNhatCauHinh, themMuc, xoaMuc, suaMuc } from '../mikrotik-topo-lan-card.js';
 
 const mang = JSON.parse(readFileSync(new URL('./fixtures/states.json', import.meta.url), 'utf8'));
 const states = Object.fromEntries(mang.map((s) => [s.entity_id, { state: s.state, attributes: s.attributes }]));
@@ -312,4 +312,23 @@ test('VPN: giao diện WireGuard không phải cổng; peer gắn vào đúng gi
   assert.match(html, /truy cập từ xa/);
   const raKhoi = html.slice(html.indexOf('vpn-khoi ra'), html.indexOf('vpn-khoi vao'));
   assert.match(raKhoi, /surfshark HK/, 'surfshark nằm trong khối đi ra Internet');
+});
+
+test('trình sửa: đặt/xoá khoá, thêm/sửa/xoá mục switch và bộ phát; không sửa đối tượng gốc, rỗng thì bỏ khoá', () => {
+  const goc = { title: 'A' };
+  assert.deepEqual(capNhatCauHinh(goc, 'zte_port', 'ether2'), { title: 'A', zte_port: 'ether2' });
+  assert.deepEqual(capNhatCauHinh({ title: 'A', zte_port: 'ether2' }, 'zte_port', ''), { title: 'A' });
+  assert.deepEqual(goc, { title: 'A' }, 'đối tượng gốc không đổi');
+  let c = themMuc({}, 'switches', { name: 'Switch 1', port: 'ether3' });
+  c = themMuc(c, 'switches', { name: 'Switch 2', port: '' });
+  assert.equal(c.switches.length, 2);
+  c = suaMuc(c, 'switches', 1, 'port', 'ether4');
+  assert.equal(c.switches[1].port, 'ether4');
+  c = suaMuc(c, 'switches', 1, 'port', '');
+  assert.equal('port' in c.switches[1], false, 'trường rỗng bị bỏ');
+  c = xoaMuc(c, 'switches', 0);
+  assert.equal(c.switches.length, 1);
+  c = xoaMuc(c, 'switches', 0);
+  assert.equal('switches' in c, false, 'danh sách rỗng thì bỏ khoá');
+  assert.equal(suaMuc({}, 'access_points', 3, 'name', 'x').access_points, undefined, 'sửa mục không tồn tại không làm hỏng');
 });

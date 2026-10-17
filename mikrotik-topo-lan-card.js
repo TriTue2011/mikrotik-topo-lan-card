@@ -182,6 +182,37 @@ export function discover(states, cfg = {}) {
  * Tự vẽ bộ phát ZTE từ cảm biến số máy (thuộc tính clients) khi chưa khai bộ phát nào.
  * Cần khai `zte_port`: cổng MikroTik nơi ZTE cắm. Không khai thì không tự thêm (card không đoán cổng).
  */
+/** Đặt một khoá cấu hình; giá trị rỗng thì xoá khoá (YAML khỏi đầy dòng thừa). Không sửa đối tượng gốc. */
+export function capNhatCauHinh(config, khoa, gia) {
+  const ra = { ...(config || {}) };
+  if (gia === '' || gia === null || gia === undefined) delete ra[khoa];
+  else ra[khoa] = gia;
+  return ra;
+}
+
+/** Thêm một mục vào danh sách (switches / access_points). */
+export function themMuc(config, khoa, muc) {
+  const ds = Array.isArray((config || {})[khoa]) ? config[khoa] : [];
+  return { ...(config || {}), [khoa]: [...ds, muc] };
+}
+
+/** Xoá mục thứ i của danh sách; danh sách rỗng thì bỏ khoá. */
+export function xoaMuc(config, khoa, i) {
+  const ds = Array.isArray((config || {})[khoa]) ? config[khoa].filter((_, j) => j !== i) : [];
+  const ra = { ...(config || {}) };
+  if (ds.length) ra[khoa] = ds; else delete ra[khoa];
+  return ra;
+}
+
+/** Sửa một trường của mục thứ i; trường rỗng thì bỏ trường đó khỏi mục. */
+export function suaMuc(config, khoa, i, truong, gia) {
+  const ds = Array.isArray((config || {})[khoa]) ? config[khoa].map((m) => ({ ...m })) : [];
+  if (!ds[i]) return { ...(config || {}) };
+  if (gia === '' || gia === null || gia === undefined) delete ds[i][truong];
+  else ds[i][truong] = gia;
+  return { ...(config || {}), [khoa]: ds };
+}
+
 export function autoCauHinh(states = {}, cfg = {}) {
   if (!cfg.zte_port || (cfg.access_points && cfg.access_points.length)) return cfg;
   const id = Object.keys(states || {}).find((e) => /^sensor\..+_connected_devices$/.test(e)
@@ -595,7 +626,8 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
 
     getCardSize() { return 8; }
 
-    static getStubConfig() { return { type: 'custom:mikrotik-topo-lan-card', prefix: 'mikrotik_router' }; }
+    static getStubConfig() { return { type: 'custom:mikrotik-topo-lan-card', title: 'Mạng LAN MikroTik' }; }
+    static getConfigElement() { return document.createElement('mikrotik-topo-lan-card-editor'); }
 
     /** Đồng bộ theo người dùng HA (giữa các thiết bị): lỗi thì giữ bản trong trình duyệt. */
     async _napUserData() {
@@ -729,7 +761,179 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
     disconnectedCallback() { if (this._ro) this._ro.disconnect(); }
   }
 
+
+  /* Trình sửa bằng giao diện (Sửa thẻ): hai tab. Hợp đồng với Home Assistant: setConfig, gán .hass,
+     phát «config-changed». Nút Lưu/Huỷ là của Home Assistant. */
+  class MikrotikTopoLanCardEditor extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({ mode: 'open' });
+      this._config = {};
+      this._tab = 'cau-hinh';
+      this._built = false;
+    }
+
+    setConfig(config) {
+      this._config = { ...(config || {}) };
+      this._build();
+      this._fill();
+    }
+
+    set hass(hass) {
+      this._hass = hass;
+      if (this._built) this._fillDatalist();
+    }
+
+    _doi(config) {
+      this._config = config;
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
+    }
+
+    _build() {
+      if (this._built) return;
+      this._built = true;
+      this.shadowRoot.innerHTML = `
+        <style>
+          :host { display: block; }
+          .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--divider-color, #444); margin-bottom: 14px; }
+          .tab { padding: 9px 14px; border: 0; background: transparent; cursor: pointer; color: var(--secondary-text-color);
+            font: inherit; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+          .tab.on { color: var(--primary-color, #03a9f4); border-bottom-color: var(--primary-color, #03a9f4); }
+          .nhom { border: 1px solid var(--divider-color, #444); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+          .nhom h4 { margin: 0 0 10px; font-size: 1rem; font-weight: 600; }
+          .dong { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 10px; align-items: center; margin-bottom: 10px; }
+          .dong label { color: var(--secondary-text-color); font-size: .9rem; }
+          input, select { width: 100%; box-sizing: border-box; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--divider-color, #555);
+            background: var(--card-background-color, #1c1c1c); color: var(--primary-text-color); font: inherit; }
+          .muc { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 6px; margin-bottom: 8px; align-items: center; }
+          .muc.ap { grid-template-columns: 1fr 1fr 1fr 1fr auto; }
+          button.them { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--primary-color, #03a9f4); background: transparent;
+            color: var(--primary-color, #03a9f4); cursor: pointer; font: inherit; }
+          button.xoa { padding: 6px 9px; border-radius: 8px; border: 1px solid var(--error-color, #db4437); background: transparent;
+            color: var(--error-color, #db4437); cursor: pointer; font: inherit; }
+          .ghi { color: var(--secondary-text-color); font-size: .85rem; margin: 0 0 8px; }
+        </style>
+        <div class="tabs">
+          <button class="tab" data-tab="cau-hinh">Cấu hình</button>
+          <button class="tab" data-tab="thiet-bi">Thiết bị</button>
+        </div>
+        <div class="noi-dung"></div>
+        <datalist id="dl-cam-bien"></datalist>
+        <datalist id="dl-cong"></datalist>
+        <datalist id="dl-clients"></datalist>`;
+      this.shadowRoot.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+        this._tab = b.dataset.tab;
+        this._fill();
+      }));
+    }
+
+    _fill() {
+      if (!this._built) return;
+      this.shadowRoot.querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === this._tab));
+      const nd = this.shadowRoot.querySelector('.noi-dung');
+      nd.innerHTML = this._tab === 'thiet-bi' ? this._htmlThietBi() : this._htmlCauHinh();
+      this._gan();
+      this._fillDatalist();
+    }
+
+    _truong(khoa, nhan, kieu = 'text', goiY = '') {
+      const gia = this._config[khoa] ?? '';
+      return `<div class="dong"><label>${nhan}</label><input data-khoa="${khoa}" type="${kieu}" value="${String(gia).replace(/"/g, '&quot;')}" placeholder="${goiY}"></div>`;
+    }
+
+    _htmlCauHinh() {
+      return `
+        <div class="nhom"><h4>Thẻ</h4>
+          ${this._truong('title', 'Tiêu đề', 'text', 'Mạng LAN MikroTik')}
+          ${this._truong('isp_name', 'Tên đường ra Internet', 'text', 'Internet')}
+          ${this._truong('client_limit', 'Số máy hiện ban đầu', 'number', '30')}
+          <div class="dong"><label>Ngôn ngữ</label>
+            <select data-khoa="language"><option value="vi">Tiếng Việt</option><option value="en">English</option></select></div>
+          <div class="dong"><label>Hiện danh sách máy</label>
+            <input data-khoa="show_clients" type="checkbox" ${this._config.show_clients === false ? '' : 'checked'}></div>
+        </div>
+        <div class="nhom"><h4>Nguồn dữ liệu</h4>
+          <p class="ghi">Để trống thì card tự nhận từ tích hợp MikroTik Extended.</p>
+          ${this._truong('prefix', 'Tiền tố thực thể', 'text', 'tự nhận')}
+          ${this._truong('wan', 'Cổng WAN (nếu khác PPPoE)', 'text', 'pppoe-out1')}
+          ${this._truong('mac_sensor', 'Cảm biến bảng MAC theo cổng', 'text', 'sensor.mikrotik_bang_mac')}
+          ${this._truong('zte_port', 'Cổng cắm bộ phát ZTE', 'text', 'ether2')}
+          ${this._truong('zte_name', 'Tên bộ phát ZTE', 'text', 'ZTE WiFi')}
+        </div>`;
+    }
+
+    _htmlThietBi() {
+      const ds = Array.isArray(this._config.switches) ? this._config.switches : [];
+      const aps = Array.isArray(this._config.access_points) ? this._config.access_points : [];
+      return `
+        <div class="nhom"><h4>Switch</h4>
+          <p class="ghi">Switch nối với một cổng MikroTik. Máy nào nằm sau cổng của switch sẽ hiện trong switch đó.</p>
+          ${ds.map((m, i) => `<div class="muc">
+              <input data-loai="switches" data-i="${i}" data-truong="name" value="${String(m.name || '').replace(/"/g, '&quot;')}" placeholder="Tên switch">
+              <input data-loai="switches" data-i="${i}" data-truong="port" list="dl-cong" value="${String(m.port || '').replace(/"/g, '&quot;')}" placeholder="cổng, ví dụ ether3">
+              <input data-loai="switches" data-i="${i}" data-truong="mac_sensor" list="dl-cam-bien" value="${String(m.mac_sensor || '').replace(/"/g, '&quot;')}" placeholder="cảm biến MAC (tuỳ chọn)">
+              <button class="xoa" data-xoa="switches" data-i="${i}">Xoá</button></div>`).join('')}
+          <button class="them" data-them="switches">+ Thêm switch</button>
+        </div>
+        <div class="nhom"><h4>Bộ phát WiFi</h4>
+          ${aps.map((m, i) => `<div class="muc ap">
+              <input data-loai="access_points" data-i="${i}" data-truong="name" value="${String(m.name || '').replace(/"/g, '&quot;')}" placeholder="Tên bộ phát">
+              <input data-loai="access_points" data-i="${i}" data-truong="port" list="dl-cong" value="${String(m.port || '').replace(/"/g, '&quot;')}" placeholder="cổng cắm">
+              <input data-loai="access_points" data-i="${i}" data-truong="clients_sensor" list="dl-clients" value="${String(m.clients_sensor || '').replace(/"/g, '&quot;')}" placeholder="cảm biến clients">
+              <input data-loai="access_points" data-i="${i}" data-truong="mac_sensor" list="dl-cam-bien" value="${String(m.mac_sensor || '').replace(/"/g, '&quot;')}" placeholder="cảm biến MAC (tuỳ chọn)">
+              <button class="xoa" data-xoa="access_points" data-i="${i}">Xoá</button></div>`).join('')}
+          <button class="them" data-them="access_points">+ Thêm bộ phát</button>
+        </div>`;
+    }
+
+    _gan() {
+      const root = this.shadowRoot;
+      root.querySelectorAll('.noi-dung [data-khoa]').forEach((el) => {
+        const sk = el.dataset.khoa;
+        if (el.tagName === 'SELECT') el.value = this._config[sk] || 'vi';
+        el.addEventListener('change', () => {
+          const gia = el.type === 'checkbox' ? el.checked : (el.type === 'number' && el.value !== '' ? Number(el.value) : el.value.trim());
+          // Mặc định là hiện: bỏ khoá khi tick, đặt false khi bỏ tick.
+          if (sk === 'show_clients') this._doi(capNhatCauHinh(this._config, sk, gia ? undefined : false));
+          else this._doi(capNhatCauHinh(this._config, sk, gia));
+        });
+      });
+      root.querySelectorAll('[data-loai]').forEach((el) => el.addEventListener('change', () => {
+        this._doi(suaMuc(this._config, el.dataset.loai, Number(el.dataset.i), el.dataset.truong, el.value.trim()));
+      }));
+      root.querySelectorAll('[data-them]').forEach((b) => b.addEventListener('click', () => {
+        const khoa = b.dataset.them;
+        const muc = khoa === 'switches' ? { name: 'Switch mới', port: '' } : { name: 'Bộ phát mới', port: '' };
+        this._doi(themMuc(this._config, khoa, muc));
+      }));
+      root.querySelectorAll('[data-xoa]').forEach((b) => b.addEventListener('click', () => {
+        this._doi(xoaMuc(this._config, b.dataset.xoa, Number(b.dataset.i)));
+      }));
+    }
+
+    _fillDatalist() {
+      if (!this._hass || !this.shadowRoot) return;
+      const st = this._hass.states || {};
+      const ids = Object.keys(st);
+      const cong = new Set();
+      for (const id of ids) {
+        const m = /^switch\.(.+?)_port_(.+)_port$/.exec(id);
+        if (m && st[id].attributes && st[id].attributes.name) cong.add(st[id].attributes.name);
+        if (m && /^ether|^sfp|^wlan|^bridge/i.test(m[2])) cong.add(m[2]);
+      }
+      const fill = (idDl, danhSach) => {
+        const dl = this.shadowRoot.getElementById(idDl);
+        if (dl) dl.innerHTML = danhSach.map((v) => `<option value="${String(v).replace(/"/g, '&quot;')}"></option>`).join('');
+      };
+      fill('dl-cong', [...cong]);
+      fill('dl-cam-bien', ids.filter((id) => id.startsWith('sensor.') && /mac|port|bang/i.test(id)));
+      fill('dl-clients', ids.filter((id) => id.startsWith('sensor.') && st[id].attributes && Array.isArray(st[id].attributes.clients)));
+    }
+  }
+
+
   if (!customElements.get('mikrotik-topo-lan-card')) customElements.define('mikrotik-topo-lan-card', MikrotikTopoLanCard);
+  if (!customElements.get('mikrotik-topo-lan-card-editor')) customElements.define('mikrotik-topo-lan-card-editor', MikrotikTopoLanCardEditor);
   window.customCards = window.customCards || [];
   window.customCards.push({
     type: 'mikrotik-topo-lan-card', name: 'MikroTik Topo LAN Card',
