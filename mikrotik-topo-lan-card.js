@@ -307,22 +307,26 @@ export function dungNut(cfg = {}, userNodes = [], clients = []) {
       macs: (a.macs || []).map(macChuan), ips: a.ips || [], entity: a.entity || '', tuDong: !!a.auto_private_mac, nguon: 'cfg', macSensor: a.mac_sensor || '',
       clientsSensor: a.clients_sensor || '' });
   });
-  // Proxmox (nguồn duy nhất): nút lớn; host gán theo IP/MAC khai; LXC/VM (MAC tiền tố BC:24:11) tự thành nút con.
-  if (cfg.proxmox && typeof cfg.proxmox === 'object') {
-    const pm = cfg.proxmox;
-    const cha = pm.switch ? (nut.find((n) => n.kind === KIND_SWITCH && n.name === pm.switch) || {}).key || '' : '';
-    const hostMac = pm.mac ? macChuan(pm.mac) : '';
-    nut.push({ key: 'pm', kind: KIND_SWITCH, name: String(pm.name || 'Proxmox').slice(0, 60), port: cha ? '' : (pm.port || ''), parent: cha,
-      macs: hostMac ? [hostMac] : [], ips: pm.ip ? [String(pm.ip)] : [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', proxmox: true });
+  // Hộp chứa nhiều IP (tên tùy ý: Proxmox, NAS…). Host gán theo IP/MAC khai; thiết bị có tiền tố MAC khai trong
+  // guest_mac_prefix (ví dụ bc:24:11 cho LXC/VM Proxmox) tự thành hộp con nằm trong hộp host.
+  (cfg.hosts || []).forEach((h, i) => {
+    if (!h || typeof h !== 'object') return;
+    const cha = h.switch ? (nut.find((n) => n.kind === KIND_SWITCH && n.name === h.switch) || {}).key || '' : '';
+    const key = `host-${i}`;
+    const hostMac = h.mac ? macChuan(h.mac) : '';
+    nut.push({ key, kind: KIND_SWITCH, name: String(h.name || `Host ${i + 1}`).slice(0, 60), port: cha ? '' : (h.port || ''), parent: cha,
+      macs: hostMac ? [hostMac] : [], ips: h.ip ? [String(h.ip)] : [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', box: true });
+    const tien = h.guest_mac_prefix ? macChuan(h.guest_mac_prefix).replace(/:?$/, ':') : '';
+    if (!tien) return;
     const dong = new Set();
     for (const c of clients || []) {
       const mac = macChuan(c && c.mac);
-      if (!/^bc:24:11:/.test(mac) || mac === hostMac || dong.has(mac)) continue;
+      if (!mac.startsWith(tien) || mac === hostMac || dong.has(mac)) continue;
       dong.add(mac);
-      nut.push({ key: `pm-${mac.replace(/:/g, '')}`, kind: KIND_SWITCH, name: String(c.name || c.ip || mac).slice(0, 60), port: '', parent: 'pm',
+      nut.push({ key: `${key}-${mac.replace(/:/g, '')}`, kind: KIND_SWITCH, name: String(c.name || c.ip || mac).slice(0, 60), port: '', parent: key,
         macs: [mac], ips: [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', guest: true });
     }
-  }
+  });
   (userNodes || []).forEach((u) => {
     if (!u || typeof u.id !== 'string' || !/^[a-z0-9_-]{1,40}$/.test(u.id)) return;
     const kind = u.kind === KIND_AP ? KIND_AP : KIND_SWITCH;
@@ -585,16 +589,16 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     const hien = g && hienMay ? g.hien : [];
     const sl = g ? g.clients.length : 0;
     const con = nut.filter((x) => x.parent === n.key);
-    return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}${n.proxmox ? ' pm-hop' : ''}" data-anchor="n-${esc(n.key)}" data-luu="0">
+    return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}${n.box ? ' hop-chua' : ''}" data-anchor="n-${esc(n.key)}" data-luu="0">
       <div class="tieu-nhom nhom-may">${n.kind === KIND_AP ? chamTrangThai(n.online) : ''}${n.kind === KIND_AP ? '📶 ' : '⇄ '}${esc(n.name)} (${esc(sl)})${n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : ''}</div>
       ${hien.map(hangMay).join('')}
       ${inner}
     </div>`;
   };
-  // Cây: mỗi nút là một hộp; cấp dưới nằm ở cột bên phải. Riêng Proxmox: LXC/VM là hộp con nằm TRONG hộp Proxmox.
+  // Cây: mỗi nút là một hộp; cấp dưới nằm ở cột bên phải. Riêng hộp chứa (box): các hộp con nằm TRONG hộp đó.
   const treeNode = (n) => {
     const con = nut.filter((x) => x.parent === n.key);
-    if (n.proxmox) return `<div class="tree-hang">${nutCon(n, con.map((c) => nutCon(c)).join(''))}</div>`;
+    if (n.box) return `<div class="tree-hang">${nutCon(n, con.map((c) => nutCon(c)).join(''))}</div>`;
     return `<div class="tree-hang">${nutCon(n)}${con.length ? `<div class="tree-con">${con.map(treeNode).join('')}</div>` : ''}</div>`;
   };
   // Một nhánh = một cổng MikroTik, bên phải là các nút cắm vào cổng đó.
@@ -648,7 +652,7 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .chip b,.lu b{color:var(--primary-color);margin-right:3px}
 .cay{position:relative;display:grid;grid-template-columns:minmax(300px,1fr) minmax(0,3fr);gap:24px;align-items:start}
 .tree-hang{display:flex;gap:16px;align-items:flex-start;margin-bottom:10px}
-.nut-con.pm-hop>.nut-con{margin-top:8px}
+.nut-con.hop-chua>.nut-con{margin-top:8px}
 .tree-con{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
 .nut-con{border:1px solid var(--divider-color,#444);border-radius:12px;padding:8px 10px}
 .nut-con .nhom-may{margin:0 0 6px}
