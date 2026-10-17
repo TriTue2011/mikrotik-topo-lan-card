@@ -487,7 +487,7 @@ function renderRouterBox(model, cfg, ui, t, hangCong) {
     </div>`;
   const bridgeHtml = `<div class="hop-con bridge-khoi" data-members="${esc(thanhVien.join(','))}">
       <div class="tieu-nhom">BRIDGE LAN</div>
-      ${br ? hangCong(br) : ''}
+      ${br ? hangCong({ ...br, label: br.name || 'BridgeLAN' }) : ''}
       ${ports.map((g) => `<div class="chon-dong"><label class="chon-cong"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}></label>${hangCong(g)}</div>`).join('') || `<div class="phu">${esc(t.chuaCo)}</div>`}
     </div>`;
   return `${wanHtml}${bridgeHtml}`;
