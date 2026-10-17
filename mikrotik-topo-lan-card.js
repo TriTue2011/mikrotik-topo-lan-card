@@ -746,6 +746,7 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .vpn-khoi.ra{border-left-style:dashed}
 .vpn-cong .ten{font-weight:600}
 @media (max-width:820px){.cay{grid-template-columns:1fr;gap:12px}.duong{display:none}}
+@media (max-width:820px){.cay{grid-template-columns:minmax(0,1fr)}.cot-router{min-width:0}.tree-hang{flex-direction:column;gap:8px}.tree-con{grid-template-columns:minmax(0,1fr);width:100%}.tree-con>*{min-width:0}.hang{flex-wrap:wrap}.nut-con,.dev-hop{max-width:100%;box-sizing:border-box}}
 @media (prefers-reduced-motion:reduce){.duong path.chay{animation:none}}
 `;
 
