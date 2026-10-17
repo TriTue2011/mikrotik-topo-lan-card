@@ -1,5 +1,13 @@
 # Lịch sử thay đổi
 
+## 0.4.1
+- **Sơ đồ theo cây**: mỗi thiết bị là một hộp nhỏ, nét đứt từ nguồn đã cài (switch, bộ phát WiFi, hộp host).
+- **Hộp lồng nhiều tầng**: `hosts` lồng `children` tới nhiều tầng; máy có tiền tố MAC (`guest_mac_prefix`) tự thành hộp con (LXC/VM); `guest_source` chọn nguồn cho chúng.
+- **Hộp MikroTik**: khối WAN (nhà mạng, cổng PPPoE) và khối Bridge LAN (các cổng ether, chọn cổng trong bridge).
+- **Switch nối vào switch khác** (`switch: <tên>`), có chặn vòng lặp.
+- **Đặt tên tự do**: `port_names` cho cổng và bridge, `device_names` (theo MAC) cho thiết bị.
+- Bỏ hộp ISP riêng; bỏ các nhãn nổi; các ô thiết bị trong cùng cột đều bề rộng.
+
 ## 0.4.0
 - **Khối VPN tách riêng**: giao diện WireGuard (`mik-hk`, `mik-sg`, `wg-home`) không còn là cổng. Peer `0.0.0.0/0` (surfshark) là đường ra Internet qua VPN, nét đứt; peer còn lại là truy cập từ xa.
 - **Mục WireGuard**: tổng RX/TX theo đơn vị dễ đọc (GB/MB) và thời gian bắt tay gần nhất.

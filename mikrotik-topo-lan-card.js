@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.4.1';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
