@@ -39,6 +39,9 @@ sources:                                     # nguồn thiết bị tuỳ chỉn
     attribute: devices
     pattern: '^(?<mac>[0-9A-Fa-f:]{17})\((?<name>.+)-(?<ip>[0-9.]+)\)$'
 
+  - entity: sensor.mikrotik_toc_do_may      # không có `node`: chỉ bổ sung tốc độ ↓ ↑ cho thiết bị theo MAC (nguồn đo bất kỳ)
+    attribute: clients
+
 device_names:                                # đặt tên thiết bị theo MAC
   "aa:bb:cc:dd:ee:01": Tivi phòng khách
 device_sources:                              # chọn nguồn cho thiết bị theo MAC

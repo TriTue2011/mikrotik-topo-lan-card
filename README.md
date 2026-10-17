@@ -84,6 +84,30 @@ command_line:
 (`secrets` không tự thay trong chuỗi lệnh: dùng `shell_command`/biến môi trường theo cách bạn quen, hoặc chép mật khẩu vào tệp chỉ root đọc được.) Thêm `--tls --port 8729 --insecure` nếu dùng API-SSL với chứng chỉ tự ký.
 Thuộc tính của cảm biến đặt theo **tên cổng** (`ether2`…) khớp với cổng bạn cho nút cắm vào.
 
+## Tốc độ vào/ra từng thiết bị (Kid Control)
+MikroTik Extended không đo lưu lượng theo máy; ZTE E2633 cũng không báo. RouterOS có Kid Control đo theo MAC, `tools/mikrotik_toc_do_may.py` đọc nó (chỉ ĐỌC, cùng cách với `mikrotik_bridge_hosts.py`):
+
+1. Trên router bật Kid Control một lần: `/ip kid-control add name=ca-nha mon=0s-1d tue=0s-1d wed=0s-1d thu=0s-1d fri=0s-1d sat=0s-1d sun=0s-1d`.
+2. Chép `tools/mikrotik_toc_do_may.py` **và** `tools/mikrotik_bridge_hosts.py` vào `/config/`, rồi tạo cảm biến như mục bảng MAC ở trên:
+```yaml
+command_line:
+  - sensor:
+      name: MikroTik tốc độ máy
+      unique_id: mikrotik_toc_do_may
+      command: "python3 /config/mikrotik_toc_do_may.py --host 192.168.88.1 --user docdulieu"   # MIKROTIK_PASSWORD đặt như mục trên
+      scan_interval: 30
+      value_template: "{{ value_json.clients | length }}"
+      json_attributes_path: "$"
+      json_attributes: [clients]
+```
+3. Khai làm nguồn không gắn hộp (chỉ bổ sung tốc độ cho thiết bị theo MAC; tốc độ 0 không ghi đè số thật của nguồn khác):
+```yaml
+sources:
+  - entity: sensor.mikrotik_toc_do_may
+    attribute: clients
+```
+Máy nào đo được > 0 thì hiện ↓ ↑ cạnh máy đó; bằng 0 thì ẩn. **Chưa thử trên router thật**: test dùng router giả; tên trường `rate-down`/`rate-up` của Kid Control lấy từ tài liệu RouterOS, chưa đối chiếu với đầu ra thật.
+
 ## Bộ phát WiFi tự báo danh sách máy (ZTE E2633)
 Bộ phát biết rõ máy nào đang dùng WiFi, băng tần nào (2.4G/5G) và tín hiệu bao nhiêu dBm — chính xác hơn mọi suy đoán theo cổng.
 Nếu bạn có một cảm biến Home Assistant mang thuộc tính `clients` (danh sách `{mac, band, rssi, mode}`), khai vào bộ phát:

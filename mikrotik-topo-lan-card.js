@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.6.1';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -325,7 +325,14 @@ export function layNguon(cfg = {}, states = {}) {
 export function thongTinWifi(cfg = {}, states = {}) {
   const ra = {};
   for (const g of layNguon(cfg, states)) {
-    for (const c of g.devices) ra[c.mac] = { band: c.band, rssi: c.rssi, mode: c.mode, rxRate: c.rxRate, txRate: c.txRate };
+    // Gộp theo MAC giữa các nguồn: trường nào nguồn sau có giá trị thật thì ghi đè; tốc độ 0 không xoá tốc độ thật của nguồn khác
+    // (ví dụ ZTE báo 0, Kid Control của MikroTik báo số đo được).
+    for (const c of g.devices) {
+      const cu = ra[c.mac] || {};
+      const lay = (moi, khoa) => (moi != null && moi !== '' ? moi : cu[khoa] ?? moi);
+      const toc = (moi, khoa) => (moi > 0 ? moi : (cu[khoa] > 0 ? cu[khoa] : lay(moi, khoa)));
+      ra[c.mac] = { band: lay(c.band, 'band'), rssi: lay(c.rssi, 'rssi'), mode: lay(c.mode, 'mode'), rxRate: toc(c.rxRate, 'rxRate'), txRate: toc(c.txRate, 'txRate') };
+    }
   }
   return ra;
 }
@@ -676,10 +683,10 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const chipWifi = (c) => {
     const w = wifi[macChuan(c.mac)];
     if (!w) return '';
-    const nhan = [w.band, w.rssi != null ? `${w.rssi} dBm` : '', w.mode].filter(Boolean).join(' · ');
+    const nhan = [w.band, w.rssi != null ? `${w.rssi} dBm` : ''].filter(Boolean).join(' · ');
     // Tốc độ TX/RX của máy WiFi: hiện như cổng (↓ ↑ và thanh), tách khỏi băng tần/RSSI.
     const toc = (w.rxRate || 0) > 0 || (w.txRate || 0) > 0 ? `${dongLuuLuong(w.rxRate || 0, w.txRate || 0, t)}${thanh((w.rxRate || 0) + (w.txRate || 0))}` : '';
-    return `${nhan ? `<span class="goi" title="${esc(w.mode)}">${esc(nhan)}</span>` : ''}${toc}`;
+    return `${nhan ? `<span class="goi">${esc(nhan)}</span>` : ''}${toc}`;
   };
   const chipTruong = (ds) => (Array.isArray(ds) ? ds : []).map((f) => {
     const v = giaTriTruong(f, ui.states || {});

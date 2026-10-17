@@ -1,5 +1,9 @@
 # Lịch sử thay đổi
 
+## 0.6.1
+- Bỏ chế độ WiFi (802.11n…) khỏi nhãn thiết bị; chỉ còn băng tần và tín hiệu.
+- **Tốc độ từng máy** từ Kid Control của MikroTik: `tools/mikrotik_toc_do_may.py` + nguồn `sources` không gắn hộp. Gộp theo MAC giữa các nguồn, tốc độ 0 không ghi đè số thật.
+
 ## 0.6.0
 - **Thông số của chính hộp nằm ngay tiêu đề hộp to**: MAC, IP, tốc độ của Proxmox hoặc router ZTE hiện ở tiêu đề hộp, không còn hộp/hàng riêng. Proxmox hiện tổng số LXC/VM bên trong.
 - **ZTE WiFi đủ máy**: máy ZTE báo mà MikroTik không có vẫn vào hộp, nên số máy khớp số ZTE báo; hộp có nguồn riêng được chia chỗ hiển thị trước.

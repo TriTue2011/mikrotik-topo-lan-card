@@ -101,7 +101,7 @@ def mac_theo_cong(hosts: list[dict]) -> dict[str, list[str]]:
     return {k: sorted(set(v)) for k, v in sorted(ra.items())}
 
 
-def lay(host: str, port: int, user: str, password: str, tls: bool, insecure: bool, timeout: float = 10.0) -> dict[str, list[str]]:
+def mo_ket_noi(host: str, port: int, tls: bool, insecure: bool, timeout: float = 10.0):
     raw = socket.create_connection((host, port), timeout=timeout)
     if tls:
         ctx = ssl.create_default_context()
@@ -112,6 +112,11 @@ def lay(host: str, port: int, user: str, password: str, tls: bool, insecure: boo
     else:
         s = raw
     s.settimeout(timeout)
+    return s
+
+
+def lay(host: str, port: int, user: str, password: str, tls: bool, insecure: bool, timeout: float = 10.0) -> dict[str, list[str]]:
+    s = mo_ket_noi(host, port, tls, insecure, timeout)
     try:
         dang_nhap(s, user, password)
         return mac_theo_cong(chay_lenh(s, "/interface/bridge/host/print"))

@@ -280,7 +280,7 @@ test('dòng máy hiện cổng MikroTik nó đang nối (ether3…), không hi�
   assert.doesNotMatch(html, /title="MikroTik">BridgeLAN</);
 });
 
-test('dòng máy WiFi hiện MAC, băng tần, RSSI, chế độ và tốc độ RX/TX từ bộ phát ZTE', () => {
+test('dòng máy WiFi hiện MAC, băng tần, RSSI (không hiện chế độ 802.11) và tốc độ RX/TX từ bộ phát ZTE', () => {
   const cam = 'sensor.zte_router_172_16_10_24_connected_devices';
   const st = { [cam]: { state: '1', attributes: { clients: [{ mac: '02:00:00:00:00:31', band: '5G', rssi: -61, mode: '802.11ax', rx_rate: 1200000, tx_rate: 800000 }] } },
     'device_tracker.may_zte': { state: 'home', attributes: { attribution: 'Data provided by Mikrotik', mac: '02:00:00:00:00:31', ip: '172.16.10.31', host_name: 'May ZTE', interface: 'BridgeLAN', source: 'dhcp' } } };
@@ -289,7 +289,8 @@ test('dòng máy WiFi hiện MAC, băng tần, RSSI, chế độ và tốc độ
   m.clients = [{ mac: '02:00:00:00:00:31', ip: '172.16.10.31', name: 'May ZTE', interface: 'BridgeLAN', source: 'dhcp', online: true }];
   const html = renderHtml(m, cfg, { states: st, gan: {}, nodes: [] });
   assert.match(html, /02:00:00:00:00:31/);
-  assert.match(html, /5G · -61 dBm · 802\.11ax/);
+  assert.match(html, /5G · -61 dBm</);
+  assert.doesNotMatch(html, /802\.11/);
   assert.match(html, /↓<\/b>1\.20 Mbps/);
   assert.match(html, /↑<\/b>800 kbps/);
 });
@@ -501,4 +502,19 @@ test('VPN: giao diện không bật hoặc peer không kết nối thì ẩn; t�
   const html = renderHtml(m, {}, { states });
   for (const x of tat) assert.ok(!html.includes(`title="${x.name}"`) && !html.includes(`<span class="ten">${x.label || x.name}</span>`), `${x.name} đang tắt phải ẩn`);
   assert.ok(!/↓<\/b>0 <b[^>]*>↑<\/b>0</.test(html), 'tốc độ ↓0 ↑0 không được hiện');
+});
+
+test('tốc độ từng máy: nguồn đo (Kid Control) bổ sung cho nguồn WiFi, tốc độ 0 không xoá số thật', () => {
+  const st = {
+    'sensor.zte': { state: '1', attributes: { clients: [{ mac: '02:00:00:00:00:51', band: '5G', rssi: -50, rx_rate: 0, tx_rate: 0 }] } },
+    'sensor.kid': { state: '1', attributes: { clients: [{ mac: '02:00:00:00:00:51', rx_rate: 2000000, tx_rate: 100000 }, { mac: '02:00:00:00:00:52', rx_rate: 5000, tx_rate: 0 }] } }
+  };
+  const cfg = { access_points: [{ name: 'ZTE', clients_sensor: 'sensor.zte' }], sources: [{ entity: 'sensor.kid', attribute: 'clients' }] };
+  const w = thongTinWifi(cfg, st);
+  assert.deepEqual(w['02:00:00:00:00:51'], { band: '5G', rssi: -50, mode: '', rxRate: 2000000, txRate: 100000 });
+  assert.equal(w['02:00:00:00:00:52'].rxRate, 5000);
+  // Nguồn WiFi đứng SAU nguồn đo và báo 0: vẫn giữ số đo.
+  const w2 = thongTinWifi({ sources: [cfg.sources[0], { entity: 'sensor.zte', attribute: 'clients' }] }, st);
+  assert.equal(w2['02:00:00:00:00:51'].rxRate, 2000000);
+  assert.equal(w2['02:00:00:00:00:51'].band, '5G');
 });
