@@ -377,10 +377,13 @@ export function phanNhom(clients, cfg = {}, gan = {}, states = {}, userNodes = [
   };
   const wifiMik = { key: 'mik-wifi', name: 'WiFi (MikroTik)', clients: [] };
   const coDay = { key: 'lan', name: 'LAN', clients: [] };
+  const nguonCfg = {};
+  for (const [k, v] of Object.entries(cfg.device_sources || {})) if (typeof v === 'string') nguonCfg[macChuan(k)] = v;
   for (const c of clients) {
     const mac = macChuan(c.mac);
     let dich = null;
-    if (mac in gan) { const g = gan[mac]; dich = theoKey.get(typeof g === 'number' ? `ap-${g}` : g) || null; }
+    if (nguonCfg[mac]) dich = nut.find((n) => !n.guest && n.name === nguonCfg[mac]) || null;
+    if (!dich && mac in gan) { const g = gan[mac]; dich = theoKey.get(typeof g === 'number' ? `ap-${g}` : g) || null; }
     if (!dich) dich = nut.find((n) => n.macs.includes(mac) || (c.ip && n.ips.includes(c.ip))) || null;
     if (!dich && macRiengTu(c.mac)) dich = nut.find((n) => n.kind === KIND_AP && n.tuDong && goc(n).sau.has(mac)) || null;
     if (!dich) dich = nut.find((n) => n.kind === KIND_SWITCH && n.sau.has(mac)) || null;
@@ -547,15 +550,6 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     <div class="hang" data-anchor="ham-${esc(h.id)}" data-luu="${esc(Math.round(h.rx + h.tx))}">
       ${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span><span class="lu">${esc(h.connected ? t.connected : t.disconnected)}</span>${dongLuuLuong(h.rx, h.tx, t)}
     </div>`;
-  // Chọn nguồn cho thiết bị: một ô liệt kê các nút (switch, bộ phát, hộp host); «chưa gán» thì về nhóm LAN.
-  const nutGan = (c) => {
-    if (!nut.length) return '';
-    const mac = macChuan(c.mac);
-    const g = (ui.gan || {})[mac];
-    const chon = g == null ? '' : (typeof g === 'number' ? `ap-${g}` : g);
-    const tuyChon = nut.filter((n) => !n.guest).map((n) => `<option value="${esc(n.key)}" ${chon === n.key ? 'selected' : ''}>${esc(n.name)}</option>`).join('');
-    return `<select class="nguon-chon" data-mac="${esc(mac)}" aria-label="${esc(t.assign)}"><option value="">${esc(t.unassign)}</option>${tuyChon}</select>`;
-  };
   const wifi = thongTinWifi(cfg, ui.states || {});
   const chipWifi = (c) => {
     const w = wifi[macChuan(c.mac)];
@@ -566,7 +560,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   };
   const hangMay = (c) => `
     <div class="hang may ${c.online ? '' : 'off'}" title="${esc(c.mac)} · ${esc(c.interface)} · ${esc(c.source)}">
-      ${chamTrangThai(c.online)}<span class="ten">${esc((cfg.device_names || {})[macChuan(c.mac)] || c.name)}</span>${chipWifi(c)}${c.interface && !/bridge/i.test(c.interface) ? `<span class="goi" title="MikroTik">${esc(c.interface)}</span>` : ''}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.mac)}</span><span class="lu">${esc(c.ip)}</span>${nutGan(c)}
+      ${chamTrangThai(c.online)}<span class="ten">${esc((cfg.device_names || {})[macChuan(c.mac)] || c.name)}</span>${chipWifi(c)}${c.interface && !/bridge/i.test(c.interface) ? `<span class="goi" title="MikroTik">${esc(c.interface)}</span>` : ''}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.mac)}</span><span class="lu">${esc(c.ip)}</span>
     </div>`;
   const tieuDeNhom = (g) => {
     const n = g.node;
@@ -879,11 +873,6 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         for (const [mac, g] of Object.entries(this._ui.gan)) if (g === key) delete this._ui.gan[mac];
         this._luu(); this._ve(true);
       }));
-      r.querySelectorAll('.nguon-chon').forEach((sel) => sel.addEventListener('change', () => {
-        const mac = sel.dataset.mac;
-        if (sel.value) this._ui.gan[mac] = sel.value; else delete this._ui.gan[mac];
-        this._luu(); this._ve(true);
-      }));
       r.querySelectorAll('[data-act="gan"]').forEach((nut) => nut.addEventListener('click', () => {
         const mac = nut.dataset.mac;
         const { nut: ds } = phanNhom([], this._cfg, {}, this._hass.states, this._ui.nodes);
@@ -1051,9 +1040,27 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         </div>`;
     }
 
+    _thietBi() {
+      const st = (this._hass && this._hass.states) || {};
+      return Object.keys(st)
+        .filter((id) => id.startsWith('device_tracker.') && /mikrotik/i.test((st[id].attributes || {}).attribution || ''))
+        .map((id) => { const a = st[id].attributes; return { mac: macChuan(a.mac || ''), name: a.host_name || a.friendly_name || id }; })
+        .filter((d) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(d.mac))
+        .sort((x, y) => x.name.localeCompare(y.name));
+    }
+
     _htmlThietBi() {
       const ds = Array.isArray(this._config.switches) ? this._config.switches : [];
       const aps = Array.isArray(this._config.access_points) ? this._config.access_points : [];
+      const hs = Array.isArray(this._config.hosts) ? this._config.hosts : [];
+      const nguon = this._config.device_sources || {};
+      const tens = [...ds, ...aps, ...hs].map((x) => x && x.name).filter(Boolean);
+      const devs = this._thietBi();
+      const phanNguon = `
+        <div class="nhom"><h4>Nguồn của thiết bị</h4>
+          <p class="ghi">Chọn nguồn cho từng thiết bị. Thiết bị chưa chọn sẽ vào default_source (nếu có).</p>
+          ${devs.map((d) => `<div class="dong"><label>${esc(d.name)}</label><select data-dev="${esc(d.mac)}"><option value="">— bỏ gán —</option>${tens.map((n) => `<option value="${esc(n)}" ${nguon[d.mac] === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`).join('') || '<p class="ghi">Chưa có thiết bị MikroTik.</p>'}
+        </div>`;
       return `
         <div class="nhom"><h4>Switch</h4>
           <p class="ghi">Switch nối với một cổng MikroTik. Máy nào nằm sau cổng của switch sẽ hiện trong switch đó.</p>
@@ -1072,11 +1079,17 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
               <input data-loai="access_points" data-i="${i}" data-truong="mac_sensor" list="dl-cam-bien" value="${String(m.mac_sensor || '').replace(/"/g, '&quot;')}" placeholder="cảm biến MAC (tuỳ chọn)">
               <button class="xoa" data-xoa="access_points" data-i="${i}">Xoá</button></div>`).join('')}
           <button class="them" data-them="access_points">+ Thêm bộ phát</button>
-        </div>`;
+        </div>
+        ${phanNguon}`;
     }
 
     _gan() {
       const root = this.shadowRoot;
+      root.querySelectorAll('[data-dev]').forEach((sel) => sel.addEventListener('change', () => {
+        const map = { ...(this._config.device_sources || {}) };
+        if (sel.value) map[sel.dataset.dev] = sel.value; else delete map[sel.dataset.dev];
+        this._doi(capNhatCauHinh(this._config, 'device_sources', Object.keys(map).length ? map : undefined));
+      }));
       root.querySelectorAll('.noi-dung [data-khoa]').forEach((el) => {
         const sk = el.dataset.khoa;
         if (el.tagName === 'SELECT') el.value = this._config[sk] || 'vi';

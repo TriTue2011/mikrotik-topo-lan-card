@@ -93,7 +93,7 @@ test('hiển thị: nhóm ZTE có tiêu đề + nút gán; giới hạn số thi
   const ui = { aps: [{ i: 0, name: 'ZTE WiFi' }], gan: {}, states };
   const html = renderHtml(discover(states, cfg), cfg, ui);
   assert.match(html, /ZTE WiFi \(0\)/);
-  assert.match(html, /class="nguon-chon"/);
+  assert.doesNotMatch(html, /nguon-chon/, 'ô chọn nguồn nằm trong cài đặt, không trên card');
   assert.match(html, /Xem thêm/);
   const hit = renderHtml(discover(states, cfg), cfg, { ...ui, search: 'Thiết bị 07' });
   assert.match(hit, /Thiết bị 07/); assert.ok(!/Thiết bị 08/.test(hit));
@@ -427,4 +427,15 @@ test('hộp lồng nhiều tầng: hộp con khai tay lồng tiếp; máy có ti
   const guests = nut.filter((n) => n.guest);
   assert.deepEqual(guests.map((g) => g.parent), ['sw-0'], 'Adguard nối vào switch nguồn của NAS, một lần duy nhất');
   assert.ok(!guests.some((g) => g.macs.includes('02:00:00:00:00:99')));
+});
+
+test('device_sources trong cấu hình: thiết bị vào đúng nút đã chọn (ưu tiên hơn default_source)', () => {
+  const cfg = { switches: [{ name: 'SW1', port: 'ether2' }, { name: 'SW2', port: 'ether3' }], default_source: 'SW2',
+    device_sources: { 'AA:AA:AA:00:00:01': 'SW1' } };
+  const may = [{ mac: 'AA:AA:AA:00:00:01', ip: '172.16.10.50', name: 'Ban 1', online: true, interface: 'ether4' },
+    { mac: 'AA:AA:AA:00:00:02', ip: '172.16.10.51', name: 'Ban 2', online: true, interface: 'ether4' }];
+  const { nhom } = phanNhom(may, cfg, {}, {}, []);
+  const theo = Object.fromEntries(nhom.map((g) => [g.name, g.clients.map((c) => c.name)]));
+  assert.deepEqual(theo['SW1'], ['Ban 1']);
+  assert.deepEqual(theo['SW2'], ['Ban 2']);
 });
