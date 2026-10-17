@@ -373,7 +373,7 @@ test('hộp MikroTik: khối WAN và khối Bridge LAN xếp chồng; trong Brid
   const html = renderHtml(m, {}, { states: st, gan: {}, nodes: [] });
   assert.match(html, /wan-hop/);
   assert.match(html, /wan-hop/);
-  assert.match(html, /BRIDGE LAN/);
+  assert.match(html, /bridge-khoi/);
   assert.match(html, /data-port="ether2"[^>]*checked/);
   assert.match(html, /data-port="ether3"[^>]*checked/);
   assert.doesNotMatch(html, /data-port="WAN-ETHER1"[^>]*checked/, 'WAN không nằm trong bridge mặc định');

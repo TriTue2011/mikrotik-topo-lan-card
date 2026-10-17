@@ -488,8 +488,7 @@ function renderRouterBox(model, cfg, ui, t, hangCong) {
       ${dongLuuLuong(wan.rx, wan.tx, t)}
     </div>`;
   const bridgeHtml = `<div class="hop-con bridge-khoi" data-members="${esc(thanhVien.join(','))}">
-      <div class="tieu-nhom">BRIDGE LAN</div>
-      ${br ? hangCong({ ...br, label: (cfg.port_names || {})[br.id] || br.name || 'BridgeLAN' }) : ''}
+      ${br ? `<div class="hang bridge-tieu">${chamTrangThai(br.running)}<span class="ten">${esc((cfg.port_names || {})[br.id] || br.name || 'BridgeLAN')}</span>${dongLuuLuong(br.rx, br.tx, t)}${thanh(br.rx + br.tx)}</div>` : ''}
       ${ports.map((g) => `<div class="chon-dong"><label class="chon-cong"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}></label>${hangCong(g)}</div>`).join('') || `<div class="phu">${esc(t.chuaCo)}</div>`}
     </div>`;
   return `${wanHtml}${bridgeHtml}`;
@@ -606,7 +605,8 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
       return hopMay(c, `n-${esc(n.key)}`);
     }
     const sl = g ? g.clients.length : 0;
-    const rows = n.box && g && hienMay ? g.hien.map(hangMay).join('') : '';
+    let rows = n.box && g && hienMay ? g.hien.map(hangMay).join('') : '';
+    if (n.box && !rows && (n.ips.length || n.macs.length)) rows = `<div class="hop-dong phu">${esc([n.ips[0], n.macs[0]].filter(Boolean).join(' · '))}</div>`;
     return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}${n.box ? ' hop-chua' : ''}" data-anchor="n-${esc(n.key)}" data-luu="0">
       <div class="tieu-nhom nhom-may">${n.kind === KIND_AP ? chamTrangThai(n.online) : ''}${n.kind === KIND_AP ? '📶 ' : '⇄ '}${esc(n.name)} (${esc(sl)})${n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : ''}</div>
       ${rows}
