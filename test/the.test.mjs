@@ -392,3 +392,19 @@ test('switch nối vào switch khác (khai switch: <tên>); khai vòng thì bỏ
   const a = vong.find((n) => n.name === 'A'); const b = vong.find((n) => n.name === 'B');
   assert.ok(!(a.parent === b.key && b.parent === a.key), 'không tạo vòng A↔B');
 });
+
+test('Proxmox: một nguồn duy nhất; máy có MAC BC:24:11 thành hộp con của Proxmox; host gán theo IP', () => {
+  const may = [
+    { mac: 'bc:24:11:69:c8:47', name: 'Adguard home', ip: '172.16.10.10', online: true },
+    { mac: 'bc:24:11:aa:bb:cc', name: 'Frigate', ip: '172.16.10.11', online: true },
+    { mac: '02:00:00:00:00:99', name: 'May la', ip: '172.16.10.99', online: true },
+  ];
+  const nut = dungNut({ switches: [{ name: 'SW1', port: 'ether2' }], proxmox: { name: 'Proxmox', ip: '172.16.10.5', switch: 'SW1' } }, [], may);
+  const pm = nut.find((n) => n.key === 'pm');
+  assert.equal(pm.parent, 'sw-0', 'Proxmox nối dưới SW1');
+  const guests = nut.filter((n) => n.guest);
+  assert.deepEqual(guests.map((g) => g.parent), ['pm', 'pm'], 'LXC/VM là con của Proxmox');
+  assert.ok(!guests.some((g) => g.macs.includes('02:00:00:00:00:99')), 'máy không BC:24:11 không thành LXC/VM');
+  const { nut: ds } = phanNhom(may, { switches: [{ name: 'SW1', port: 'ether2' }], proxmox: { name: 'Proxmox', ip: '172.16.10.5', switch: 'SW1' } }, {}, {}, []);
+  assert.ok(ds.find((n) => n.key === 'pm'));
+});

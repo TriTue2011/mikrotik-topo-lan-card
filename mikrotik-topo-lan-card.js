@@ -283,7 +283,7 @@ export const KIND_AP = 'ap';
  * Mỗi nút: {key, kind: 'switch'|'ap', name, port (cổng MikroTik nó cắm vào) | parent (khoá nút cha), macs (khai báo rõ), ips, entity, tuDong, nguon}.
  * Khoá: sw-<i>, ap-<i> (YAML) và u-<id> (người dùng).
  */
-export function dungNut(cfg = {}, userNodes = []) {
+export function dungNut(cfg = {}, userNodes = [], clients = []) {
   const nut = [];
   (cfg.switches || []).forEach((w, i) => {
     if (!w) return;
@@ -307,6 +307,22 @@ export function dungNut(cfg = {}, userNodes = []) {
       macs: (a.macs || []).map(macChuan), ips: a.ips || [], entity: a.entity || '', tuDong: !!a.auto_private_mac, nguon: 'cfg', macSensor: a.mac_sensor || '',
       clientsSensor: a.clients_sensor || '' });
   });
+  // Proxmox (nguồn duy nhất): nút lớn; host gán theo IP/MAC khai; LXC/VM (MAC tiền tố BC:24:11) tự thành nút con.
+  if (cfg.proxmox && typeof cfg.proxmox === 'object') {
+    const pm = cfg.proxmox;
+    const cha = pm.switch ? (nut.find((n) => n.kind === KIND_SWITCH && n.name === pm.switch) || {}).key || '' : '';
+    const hostMac = pm.mac ? macChuan(pm.mac) : '';
+    nut.push({ key: 'pm', kind: KIND_SWITCH, name: String(pm.name || 'Proxmox').slice(0, 60), port: cha ? '' : (pm.port || ''), parent: cha,
+      macs: hostMac ? [hostMac] : [], ips: pm.ip ? [String(pm.ip)] : [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', proxmox: true });
+    const dong = new Set();
+    for (const c of clients || []) {
+      const mac = macChuan(c && c.mac);
+      if (!/^bc:24:11:/.test(mac) || mac === hostMac || dong.has(mac)) continue;
+      dong.add(mac);
+      nut.push({ key: `pm-${mac.replace(/:/g, '')}`, kind: KIND_SWITCH, name: String(c.name || c.ip || mac).slice(0, 60), port: '', parent: 'pm',
+        macs: [mac], ips: [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', guest: true });
+    }
+  }
   (userNodes || []).forEach((u) => {
     if (!u || typeof u.id !== 'string' || !/^[a-z0-9_-]{1,40}$/.test(u.id)) return;
     const kind = u.kind === KIND_AP ? KIND_AP : KIND_SWITCH;
@@ -326,7 +342,7 @@ export function dungNut(cfg = {}, userNodes = []) {
  * Nút con (cắm vào nút khác) không tự biết MAC phía sau: chỉ nhận máy gán rõ, gán tay, hoặc (bộ phát bật gợi ý) máy MAC riêng tư sau cổng của nút gốc.
  */
 export function phanNhom(clients, cfg = {}, gan = {}, states = {}, userNodes = []) {
-  const nut = dungNut(cfg, userNodes).map((n) => ({
+  const nut = dungNut(cfg, userNodes, clients).map((n) => ({
     ...n, clients: [], online: n.entity && states[n.entity] ? states[n.entity].state === 'home' : null
   }));
   // Bộ phát tự báo danh sách máy WiFi của nó: đó là khai báo RÕ (chính xác hơn mọi suy đoán theo cổng).
@@ -564,19 +580,21 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const chuanCong = (x) => String(x || '').toLowerCase().replace(/\s+/g, '_').replace(/["\\]/g, '');
   const hienMay = cfg.show_clients !== false;
   // Nút switch/bộ phát: tên, số máy, máy của nó, rồi các nút con (ví dụ bộ phát WiFi nối dưới switch).
-  const nutCon = (n) => {
+  const nutCon = (n, inner = '') => {
     const g = nhomHien.find((x) => x.node && x.node.key === n.key);
     const hien = g && hienMay ? g.hien : [];
     const sl = g ? g.clients.length : 0;
     const con = nut.filter((x) => x.parent === n.key);
-    return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}" data-anchor="n-${esc(n.key)}" data-luu="0">
+    return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}${n.proxmox ? ' pm-hop' : ''}" data-anchor="n-${esc(n.key)}" data-luu="0">
       <div class="tieu-nhom nhom-may">${n.kind === KIND_AP ? chamTrangThai(n.online) : ''}${n.kind === KIND_AP ? '📶 ' : '⇄ '}${esc(n.name)} (${esc(sl)})${n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : ''}</div>
       ${hien.map(hangMay).join('')}
+      ${inner}
     </div>`;
   };
-  // Cây: mỗi nút là một hộp; nút con (cấp dưới) nằm ở cột bên phải, không lồng trong hộp cha.
+  // Cây: mỗi nút là một hộp; cấp dưới nằm ở cột bên phải. Riêng Proxmox: LXC/VM là hộp con nằm TRONG hộp Proxmox.
   const treeNode = (n) => {
     const con = nut.filter((x) => x.parent === n.key);
+    if (n.proxmox) return `<div class="tree-hang">${nutCon(n, con.map((c) => nutCon(c)).join(''))}</div>`;
     return `<div class="tree-hang">${nutCon(n)}${con.length ? `<div class="tree-con">${con.map(treeNode).join('')}</div>` : ''}</div>`;
   };
   // Một nhánh = một cổng MikroTik, bên phải là các nút cắm vào cổng đó.
@@ -630,13 +648,18 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .chip b,.lu b{color:var(--primary-color);margin-right:3px}
 .cay{position:relative;display:grid;grid-template-columns:minmax(300px,1fr) minmax(0,3fr);gap:24px;align-items:start}
 .tree-hang{display:flex;gap:16px;align-items:flex-start;margin-bottom:10px}
+.nut-con.pm-hop>.nut-con{margin-top:8px}
 .tree-con{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
 .nut-con{border:1px solid var(--divider-color,#444);border-radius:12px;padding:8px 10px}
 .nut-con .nhom-may{margin:0 0 6px}
 .duong{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
 .duong path{fill:none;stroke:var(--primary-color,#03a9f4);stroke-linecap:round;opacity:.55}
 .duong path.chay{stroke-dasharray:6 8;animation:chay linear infinite}
-.duong path.nd{stroke-dasharray:5 6;animation:none}
+.duong path.nd{animation:none}
+.duong path.nd0{stroke-dasharray:5 6}
+.duong path.nd1{stroke-dasharray:2 4}
+.duong path.nd2{stroke-dasharray:10 4 2 4}
+.duong path.nd3{stroke-dasharray:14 6}
 @keyframes chay{to{stroke-dashoffset:-28}}
 .cot{position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;min-width:0}
 .nut-node{padding:10px 12px;border-radius:12px;border:1px solid var(--divider-color,#ddd);background:var(--card-background-color,#fff)}
@@ -766,6 +789,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       if (!this._hass) return;
       const cfgHl = autoCauHinh(this._hass.states, this._cfg);
       const model = discover(this._hass.states, cfgHl);
+      this._ui.clients = model.clients;
       this._ui.states = this._hass.states;
       const chuKy = JSON.stringify([model, this._ui.search, this._ui.limit, this._cfg.language, this._ui.gan, this._ui.nodes, this._ui.edit,
         (this._cfg.access_points || []).map((a) => (a && a.entity && this._hass.states[a.entity] ? this._hass.states[a.entity].state : '')),
@@ -852,19 +876,22 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         return cay.querySelector(`[data-name="${k}"]`) || cay.querySelector(`[data-ids~="${k}"]`);
       };
       const duong = [];
-      const noi = (tu, den, nd = false) => {
+      const noi = (tu, den, nd = '') => {
         if (!tu || !den) return;
         const p = diem(tu, 'phai'); const q = diem(den, 'trai');
         const luu = Number(den.dataset.luu || tu.dataset.luu || 0);
         const rong = luu > 0 ? Math.min(4, 1.2 + Math.log10(luu + 1) / 2.2) : 1;
         const giay = !nd && luu > 0 ? Math.max(0.5, 4 - Math.log10(luu + 1) * 0.5) : 0;
         const mx = (p.x + q.x) / 2;
-        const lop = nd ? 'nd' : (giay ? 'chay' : '');
+        const lop = nd ? `nd ${nd}` : (giay ? 'chay' : '');
         duong.push(`<path d="M${p.x},${p.y} C${mx},${p.y} ${mx},${q.y} ${q.x},${q.y}" stroke-width="${rong.toFixed(2)}" class="${lop}" style="${giay ? `animation-duration:${giay.toFixed(2)}s` : ''}"/>`);
       };
       noi(tim('isp'), tim('router'));
-      const { nut } = phanNhom([], this._cfg, {}, this._hass ? this._hass.states : {}, this._ui.nodes);
-      for (const n of nut) noi(n.parent ? tim(`n-${n.parent}`) : (n.port ? timCong(n.port) : null), tim(`n-${n.key}`), !!n.parent);
+      const { nut } = phanNhom(this._ui.clients || [], this._cfg, {}, this._hass ? this._hass.states : {}, this._ui.nodes);
+      for (const n of nut) {
+        const anh = nut.filter((x) => x.parent && x.parent === n.parent).indexOf(n) % 4;
+        noi(n.parent ? tim(`n-${n.parent}`) : (n.port ? timCong(n.port) : null), tim(`n-${n.key}`), n.parent ? `nd${anh < 0 ? 0 : anh}` : '');
+      }
       cay.querySelectorAll('[data-anchor^="cong-"], [data-anchor^="ham-"]').forEach((el) => noi(tim('router'), el));
       svg.innerHTML = duong.join('');
     }
