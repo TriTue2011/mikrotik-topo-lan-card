@@ -290,3 +290,26 @@ test('dòng máy WiFi hiện MAC, băng tần, RSSI, chế độ và tốc độ
   assert.match(html, /02:00:00:00:00:31/);
   assert.match(html, /5G · -61 dBm · 802\.11ax · ↓ 1\.20 Mbps ↑ 800 kbps/);
 });
+
+test('VPN: giao diện WireGuard không phải cổng; peer gắn vào đúng giao diện; ra Internet (0.0.0.0/0) tách với truy cập từ xa', () => {
+  const st = {
+    'switch.mikrotik_router_port_mik_hk_port': { state: 'on', attributes: { name: 'mik-hk', type: 'wg', running: true, comment: '' } },
+    'switch.mikrotik_router_port_wg_home_port': { state: 'on', attributes: { name: 'wg-home', type: 'wg', running: true, comment: 'WireGuard Home' } },
+    'switch.mikrotik_router_port_ether3_port': { state: 'off', attributes: { name: 'ether4', type: 'ether', running: false, comment: '' } },
+    'sensor.mikrotik_router_port_mik_hk_rx': { state: '111', attributes: { unit_of_measurement: 'kB/s', type: 'wg', name: 'mik-hk' } },
+    'sensor.mikrotik_router_wireguard_surfshark_hk_rx': { state: '3083948872', attributes: { unit_of_measurement: 'B', interface: 'mik-hk', allowed_address: '0.0.0.0/0', friendly_name: 'Mikrotik router WireGuard surfshark HK RX' } },
+    'binary_sensor.mikrotik_router_wireguard_surfshark_hk_connected': { state: 'on', attributes: { interface: 'mik-hk', allowed_address: '0.0.0.0/0', friendly_name: 'surfshark HK Connected' } },
+    'sensor.mikrotik_router_wireguard_phone_rx': { state: '1047148576', attributes: { unit_of_measurement: 'B', interface: 'wg-home', allowed_address: '192.16.0.2/32', friendly_name: 'Mikrotik router WireGuard Phone RX' } },
+    'binary_sensor.mikrotik_router_wireguard_phone_connected': { state: 'on', attributes: { interface: 'wg-home', allowed_address: '192.16.0.2/32', friendly_name: 'Phone Connected' } },
+  };
+  const m = discover(st, {});
+  assert.deepEqual(m.ports.map((p) => p.id), ['ether3'], 'giao diện WireGuard không vào danh sách cổng');
+  assert.deepEqual(m.vpn.ifaces.map((g) => g.id).sort(), ['mik_hk', 'wg_home']);
+  const html = renderHtml(m, {}, { states: st, gan: {}, nodes: [] });
+  assert.match(html, /vpn-khoi ra/);
+  assert.match(html, /vpn-khoi vao/);
+  assert.match(html, /đi ra Internet/);
+  assert.match(html, /truy cập từ xa/);
+  const raKhoi = html.slice(html.indexOf('vpn-khoi ra'), html.indexOf('vpn-khoi vao'));
+  assert.match(raKhoi, /surfshark HK/, 'surfshark nằm trong khối đi ra Internet');
+});

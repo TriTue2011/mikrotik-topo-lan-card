@@ -104,7 +104,7 @@ export function discover(states, cfg = {}) {
     return giaoDien.get(k);
   };
   const ham = (id) => {
-    if (!duongHam.has(id)) duongHam.set(id, { id, name: id, connected: null, rx: 0, tx: 0, rxTong: 0, txTong: 0, batTay: null });
+    if (!duongHam.has(id)) duongHam.set(id, { id, name: id, connected: null, rx: 0, tx: 0, rxTong: 0, txTong: 0, batTay: null, iface: '', allowed: '' });
     return duongHam.get(id);
   };
   const may = [];
@@ -118,12 +118,10 @@ export function discover(states, cfg = {}) {
       gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
       if (typeof a.running === 'boolean') gd.running = a.running;
     } else if ((m = reCongSwitch.exec(eid))) {
-      // Giao diện WireGuard (type wg) là đường hầm VPN: hiện ở mục VPN, không ở danh sách cổng.
-      if (String(a.type || '').toLowerCase() !== 'wg') {
-        const gd = lay(m[1], m[2]);
-        gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
-        gd.running = typeof a.running === 'boolean' ? a.running : on(s.state);
-      }
+      // Giao diện WireGuard (type wg) vẫn được ghi nhận; danh sách cổng tự loại chúng ra, mục VPN dùng chúng.
+      const gd = lay(m[1], m[2]);
+      gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
+      gd.running = typeof a.running === 'boolean' ? a.running : on(s.state);
     } else if ((m = reKetNoi.exec(eid))) {
       lay(m[1], m[2]).running = on(s.state);
     } else if ((m = reWg.exec(eid))) {
@@ -133,6 +131,7 @@ export function discover(states, cfg = {}) {
       if (/\/s$/i.test(donVi)) h[m[2]] = toBps(s.state, donVi);
       else h[m[2] + 'Tong'] = toBytes(s.state, donVi);
       h.name = (a.friendly_name || '').replace(/^.*WireGuard\s+/i, '').replace(/\s+(RX|TX)$/i, '') || h.name;
+      h.iface = h.iface || a.interface || ''; h.allowed = h.allowed || a.allowed_address || '';
     } else if ((m = reWgBatTay.exec(eid))) {
       const giay = Number(s.state);
       ham(m[1]).batTay = isFinite(giay) && giay >= 0 ? giay : null;
@@ -163,12 +162,15 @@ export function discover(states, cfg = {}) {
   const tenCong = cfg.port_names || {};
   const hienThi = (g) => ({ ...g, label: tenCong[g.id] || g.comment || g.name });
   // Cổng tên WAN thuộc đường ra Internet, không hiện như cổng nội bộ.
-  const ports = tatCa.filter((g) => g.kind === 'port' && g !== wan && !an.has(g.id) && !/wan/i.test(g.name || '')).map(hienThi);
+  const laWg = (g) => String(g.type || '').toLowerCase() === 'wg';
+  const ports = tatCa.filter((g) => g.kind === 'port' && g !== wan && !laWg(g) && !an.has(g.id) && !/wan/i.test(g.name || '')).map(hienThi);
+  const vpnIfaces = tatCa.filter((g) => g.kind === 'port' && laWg(g) && !an.has(g.id)).map(hienThi);
   const bridges = tatCa.filter((g) => g.kind === 'bridge' && !an.has(g.id)).map(hienThi);
   const pppKhac = tatCa.filter((g) => g.kind === 'ppp' && g !== wan && !an.has(g.id)).map(hienThi);
   return {
     core, wan: wan ? hienThi(wan) : null, ports, bridges, ppp: pppKhac,
     tunnels: [...duongHam.values()].filter((h) => !an.has(h.id)),
+    vpn: { ifaces: vpnIfaces, peers: [...duongHam.values()].filter((h) => !an.has(h.id)) },
     clients: may.sort((x, y) => (y.online - x.online) || x.name.localeCompare(y.name))
   };
 }
@@ -336,7 +338,7 @@ export function lamSachGan(v) {
 const CHU = {
   vi: {
     title: 'Mạng LAN MikroTik', internet: 'Internet', router: 'MikroTik', ports: 'Cổng', tunnels: 'Đường hầm VPN', clients: 'Thiết bị',
-    wgTitle: 'VPN WireGuard', batTay: 'bắt tay', truoc: 'trước', tong: 'tổng',
+    wgTitle: 'VPN WireGuard', batTay: 'bắt tay', truoc: 'trước', tong: 'tổng', vpnRa: 'đi ra Internet', vpnVao: 'truy cập từ xa',
     search: 'Tìm tên, IP, MAC…', more: 'Xem thêm', none: 'Không có dữ liệu — kiểm tra tiền tố (prefix) và tích hợp MikroTik.',
     up: 'lên', down: 'xuống', online: 'đang kết nối', cpu: 'CPU', ram: 'RAM', uptime: 'Hoạt động', noClients: 'Chưa có thiết bị',
     connected: 'đã kết nối', disconnected: 'ngắt', assign: 'Gán vào', unassign: 'Bỏ gán', wifiHint: 'MAC riêng tư — thường là máy dùng WiFi',
@@ -346,7 +348,7 @@ const CHU = {
   },
   en: {
     title: 'MikroTik LAN', internet: 'Internet', router: 'MikroTik', ports: 'Ports', tunnels: 'VPN tunnels', clients: 'Devices',
-    wgTitle: 'VPN WireGuard', batTay: 'handshake', truoc: 'ago', tong: 'total',
+    wgTitle: 'VPN WireGuard', batTay: 'handshake', truoc: 'ago', tong: 'total', vpnRa: 'exit via Internet', vpnVao: 'remote access',
     search: 'Search name, IP, MAC…', more: 'Show more', none: 'No data — check the prefix and the MikroTik integration.',
     up: 'up', down: 'down', online: 'online', cpu: 'CPU', ram: 'RAM', uptime: 'Uptime', noClients: 'No devices',
     connected: 'connected', disconnected: 'down', assign: 'Assign to', unassign: 'Unassign', wifiHint: 'Private MAC — usually a WiFi device',
@@ -403,6 +405,25 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     <div class="hang ham ${h.connected ? '' : 'off'}" title="${esc(h.name)}">
       ${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span>${h.batTay != null ? `<span class="lu">${esc(t.batTay)} ${esc(Math.round(h.batTay))} s ${esc(t.truoc)}</span>` : ''}<span class="lu">↓ ${esc(fmtBytes(h.rxTong))} ↑ ${esc(fmtBytes(h.txTong))}</span>
     </div>`;
+  // Khối VPN: giao diện WireGuard (mik-hk, wg-home…) với các peer của nó. Peer có 0.0.0.0/0 là đường đi RA Internet
+  // qua VPN (router mượn Internet); còn lại là truy cập TỪ XA vào mạng nhà.
+  const chuan = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const vpnHtml = (() => {
+    const { ifaces, peers } = model.vpn || { ifaces: [], peers: [] };
+    if (!ifaces.length && !peers.length) return '';
+    const daGan = new Set();
+    const khoi = ifaces.map((g) => {
+      const ps = peers.filter((p) => chuan(p.iface) === chuan(g.id) || chuan(p.iface) === chuan(g.name));
+      ps.forEach((p) => daGan.add(p.id));
+      const raNet = ps.some((p) => /0\.0\.0\.0\/0/.test(p.allowed || ''));
+      return `<div class="vpn-khoi ${raNet ? 'ra' : 'vao'}">
+        <div class="hang vpn-cong">${chamTrangThai(g.running)}<span class="ten">${esc(g.label)}</span><span class="lu">${esc(raNet ? t.vpnRa : t.vpnVao)}</span>${dongLuuLuong(g.rx, g.tx, t)}</div>
+        ${ps.map(hangWg).join('')}
+      </div>`;
+    }).join('');
+    const leLoi = peers.filter((p) => !daGan.has(p.id));
+    return `<div class="tieu-nhom">${esc(t.wgTitle)}</div>${khoi}${leLoi.map(hangWg).join('')}`;
+  })();
   const hangHam = (h) => `
     <div class="hang" data-anchor="ham-${esc(h.id)}" data-luu="${esc(Math.round(h.rx + h.tx))}">
       ${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span><span class="lu">${esc(h.connected ? t.connected : t.disconnected)}</span>${dongLuuLuong(h.rx, h.tx, t)}
@@ -475,7 +496,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
       <div class="cot cot-cong">
         <div class="tieu-nhom">${esc(t.ports)}</div>
         ${[...bridges, ...ports, ...ppp].map((g) => hangCong(g)).join('')}
-        ${tunnels.length ? `<div class="tieu-nhom">${esc(t.wgTitle)}</div>${tunnels.map(hangWg).join('')}` : ''}
+        ${vpnHtml}
       </div>
       ${cfg.show_clients === false ? '' : `<div class="cot cot-may">
         <div class="tieu-nhom">${esc(t.clients)} (${esc(ds.length)})</div>
@@ -530,6 +551,9 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .sua label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--secondary-text-color)}
 .sua label.ngang{flex-direction:row;align-items:center;gap:8px}
 .hang-nut{display:flex;gap:8px}
+.vpn-khoi{margin:4px 0 8px 10px;padding-left:8px;border-left:2px solid var(--divider-color,#555)}
+.vpn-khoi.ra{border-left-style:dashed}
+.vpn-cong .ten{font-weight:600}
 @media (max-width:820px){.cay{grid-template-columns:1fr;gap:12px}.duong{display:none}}
 @media (prefers-reduced-motion:reduce){.duong path.chay{animation:none}}
 `;
