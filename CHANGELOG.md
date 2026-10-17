@@ -1,5 +1,8 @@
 # Lịch sử thay đổi
 
+## 0.7.0
+- **`port_speed_sensors`**: chỉ định cảm biến tốc độ nhận/gửi cho từng cổng (ví dụ lấy từ SNMP qua helper Derivative, cập nhật mỗi vài giây) thay cho cảm biến của tích hợp MikroTik (chu kỳ 30 giây). Không có số hoặc đơn vị lạ thì giữ giá trị cũ.
+
 ## 0.6.3
 - README: hướng dẫn cài tích hợp MikroTik Extended và ZTE (`zte_tracker` bản E2633) ngay sau mục Cài đặt; yêu cầu phiên bản thống nhất; bỏ chỉ dẫn tới kho chưa công bố.
 

@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.6.3';
+export const VERSION = '0.7.0';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -152,6 +152,20 @@ export function discover(states, cfg = {}) {
         name: a.host_name || a.friendly_name || eid, ip: a.ip || '', mac: a.mac || '',
         interface: a.interface || '', online: s.state === 'home', source: a.source || ''
       });
+    }
+  }
+  // Cảm biến tốc độ do người dùng chỉ định theo cổng (ví dụ SNMP + Derivative, cập nhật nhanh hơn tích hợp MikroTik):
+  // ghi đè rx/tx của cổng đó. Cảm biến chưa có số (unknown/unavailable) hoặc đơn vị không phải tốc độ thì GIỮ giá trị cũ.
+  for (const [cong, cs] of Object.entries(cfg.port_speed_sensors || {})) {
+    const khoaCong = String(cong).toLowerCase();
+    const gd = [...giaoDien.values()].find((g) => String(g.id).toLowerCase() === khoaCong || String(g.name || '').toLowerCase() === khoaCong);
+    if (!gd || !cs || typeof cs !== 'object') continue;
+    for (const huong of ['rx', 'tx']) {
+      const e = cs[huong] ? (states || {})[cs[huong]] : null;
+      if (!e || e.state === '' || e.state == null || !isFinite(Number(e.state))) continue;
+      const donVi = String((e.attributes || {}).unit_of_measurement || '').trim().toLowerCase();
+      if (!DON_VI_BPS[donVi]) continue;
+      gd[huong] = toBps(e.state, donVi);
     }
   }
   const loi = (hau) => (states || {})[`sensor.${tienTo}_core_${hau}`];

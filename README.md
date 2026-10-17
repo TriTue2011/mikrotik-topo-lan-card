@@ -88,6 +88,7 @@ Card tự nhận WAN (cổng PPPoE/L2TP…), cổng, bridge, đường hầm Wir
 | `wan` | tự nhận | id cổng ra Internet nếu muốn chọn tay |
 | `router_name`, `isp_name` | | Tên hiển thị cho nút router / ISP |
 | `port_names` | | `{ether1: "Bộ phát WiFi"}` — đặt tên cổng |
+| `port_speed_sensors` | | `{ether2: {rx: sensor.sw1_nhan_mbit, tx: sensor.sw1_gui_mbit}}` — lấy tốc độ cổng từ cảm biến khác (ví dụ SNMP + Derivative, cập nhật vài giây) thay cho cảm biến của tích hợp MikroTik. Khoá là id hoặc tên cổng (`ether2`, `bridgelan`). Cảm biến chưa có số hoặc đơn vị không phải tốc độ (`Mbit/s`, `kB/s`…) thì card giữ giá trị cũ |
 | `hide_ports` | | Danh sách id cổng/đường hầm cần ẩn |
 | `show_clients` | `true` | Hiện cột thiết bị |
 | `client_limit` | `30` | Số thiết bị hiện ban đầu (có nút «Xem thêm») |
