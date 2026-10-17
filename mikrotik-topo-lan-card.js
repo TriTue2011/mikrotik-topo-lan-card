@@ -384,6 +384,8 @@ export function phanNhom(clients, cfg = {}, gan = {}, states = {}, userNodes = [
     if (!dich) dich = nut.find((n) => n.macs.includes(mac) || (c.ip && n.ips.includes(c.ip))) || null;
     if (!dich && macRiengTu(c.mac)) dich = nut.find((n) => n.kind === KIND_AP && n.tuDong && goc(n).sau.has(mac)) || null;
     if (!dich) dich = nut.find((n) => n.kind === KIND_SWITCH && n.sau.has(mac)) || null;
+    // Thiết bị chưa có nguồn (không phải WiFi trên MikroTik): vào nguồn mặc định khai trong default_source (tên switch/bộ phát).
+    if (!dich && cfg.default_source && !/^(wlan|wifi|wl)/i.test(c.interface || '')) dich = nut.find((n) => !n.guest && n.name === cfg.default_source) || null;
     if (dich) dich.clients.push(c);
     else if (/^(wlan|wifi|wl)/i.test(c.interface || '')) wifiMik.clients.push(c);
     else coDay.clients.push(c);
