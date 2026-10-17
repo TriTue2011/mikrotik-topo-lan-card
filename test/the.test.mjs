@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi } from '../mikrotik-topo-lan-card.js';
+import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh } from '../mikrotik-topo-lan-card.js';
 
 const mang = JSON.parse(readFileSync(new URL('./fixtures/states.json', import.meta.url), 'utf8'));
 const states = Object.fromEntries(mang.map((s) => [s.entity_id, { state: s.state, attributes: s.attributes }]));
@@ -26,7 +26,9 @@ test('khám phá dữ liệu thật (đã ẩn danh): WAN, cổng, bridge, đư�
   const m = discover(states, {});
   assert.ok(m.wan, 'phải thấy cổng ra Internet');
   assert.equal(m.wan.id, 'pppoe_out1');
-  assert.deepEqual(m.ports.map((p) => p.id).filter((i) => i.startsWith('ether')).sort(), ['ether1', 'ether2', 'ether3', 'ether4']);
+  // ether4 (entity) có tên RouterOS WAN-ETHER1 là cổng cáp ra ISP: không liệt kê như cổng nội bộ.
+  assert.deepEqual(m.ports.map((p) => p.id).filter((i) => i.startsWith('ether')).sort(), ['ether1', 'ether2', 'ether3']);
+  assert.ok(!m.ports.some((p) => /wan/i.test(p.name || '')), 'cổng WAN không nằm trong danh sách cổng nội bộ');
   assert.ok(m.bridges.some((b) => b.id === 'bridgelan'));
   assert.ok(m.tunnels.length >= 3);
   assert.equal(m.clients.length, 56);
@@ -199,4 +201,29 @@ test('bộ phát tự báo danh sách máy WiFi (clients_sensor): vào nhóm b�
   const html2 = renderHtml({ ...discover(states, {}), clients: cs }, cfg, { states: st, gan: {}, nodes: [] });
   assert.match(html2, /5G · -65 dBm/, 'hiện băng tần và tín hiệu cạnh máy');
   for (const xau of [undefined, {}, { 'sensor.zte_clients': { attributes: { clients: 'x' } } }]) assert.deepEqual(thietBiTuCamBien('sensor.zte_clients', xau), []);
+});
+
+test('MikroTik Extended: cổng là switch…_port_<id>_port, PPPoE là switch…_ppp_<id>_port; cổng WAN không lẫn vào cổng nội bộ', () => {
+  const st = {
+    'switch.mikrotik_router_port_ether3_port': { state: 'off', attributes: { name: 'ether4', default_name: 'ether3', type: 'ether', running: false, comment: '' } },
+    'switch.mikrotik_router_port_ether4_port': { state: 'on', attributes: { name: 'WAN-ETHER1', default_name: 'ether4', type: 'ether', running: true, comment: '' } },
+    'switch.mikrotik_router_ppp_pppoe_out1_port': { state: 'on', attributes: { name: 'pppoe-out1', type: 'pppoe-out', running: true, comment: 'FPT PPPoE' } },
+  };
+  const m = discover(st, {});
+  assert.equal(m.wan.name, 'pppoe-out1');
+  assert.equal(m.wan.running, true);
+  assert.deepEqual(m.ports.map((p) => p.id), ['ether3']);
+  assert.equal(m.ports[0].running, false);
+});
+
+test('tự vẽ bộ phát ZTE: có cảm biến clients và khai zte_port thì thêm bộ phát; không khai hoặc đã khai tay thì không tự thêm', () => {
+  const cam = 'sensor.zte_router_172_16_10_24_connected_devices';
+  const st = { [cam]: { state: '1', attributes: { clients: [{ mac: '02:00:00:00:00:08', band: '5G', rssi: -65, mode: '802.11ac' }] } } };
+  const cs = [may('Điện thoại', '02:00:00:00:00:08', '192.168.88.48')];
+  const c1 = autoCauHinh(st, { zte_port: 'ether2' });
+  assert.deepEqual(c1.access_points, [{ name: 'ZTE WiFi', port: 'ether2', clients_sensor: cam }]);
+  const kq = phanNhom(cs, c1, {}, st);
+  assert.equal(kq.nhom.find((g) => g.name === 'ZTE WiFi').clients.length, 1);
+  assert.equal(autoCauHinh(st, {}).access_points, undefined, 'không khai zte_port thì không đoán');
+  assert.equal(autoCauHinh(st, { zte_port: 'ether2', access_points: [{ name: 'Tay', port: 'ether2' }] }).access_points[0].name, 'Tay');
 });

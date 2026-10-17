@@ -63,6 +63,8 @@ export function discover(states, cfg = {}) {
   const reWg = new RegExp(`^sensor\\.${P}_wireguard_(.+)_(rx|tx)$`);
   const reKetNoi = new RegExp(`^binary_sensor\\.${P}_(port|bridge|ppp)_(.+)_connection$`);
   const reWgNoi = new RegExp(`^binary_sensor\\.${P}_wireguard_(.+)_connected$`);
+  // MikroTik Extended: cổng và PPPoE là switch.<tiền_tố>_port_<id>_port và switch.<tiền_tố>_ppp_<id>_port.
+  const reCongSwitch = new RegExp(`^switch\\.${P}_(port|ppp)_(.+)_port$`);
   const giaoDien = new Map();
   const duongHam = new Map();
   const lay = (loai, id) => {
@@ -84,6 +86,10 @@ export function discover(states, cfg = {}) {
       gd[m[3]] = toBps(s.state, a.unit_of_measurement);
       gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
       if (typeof a.running === 'boolean') gd.running = a.running;
+    } else if ((m = reCongSwitch.exec(eid))) {
+      const gd = lay(m[1], m[2]);
+      gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
+      gd.running = typeof a.running === 'boolean' ? a.running : on(s.state);
     } else if ((m = reKetNoi.exec(eid))) {
       lay(m[1], m[2]).running = on(s.state);
     } else if ((m = reWg.exec(eid))) {
@@ -116,7 +122,8 @@ export function discover(states, cfg = {}) {
   const an = new Set(cfg.hide_ports || []);
   const tenCong = cfg.port_names || {};
   const hienThi = (g) => ({ ...g, label: tenCong[g.id] || g.comment || g.name });
-  const ports = tatCa.filter((g) => g.kind === 'port' && g !== wan && !an.has(g.id)).map(hienThi);
+  // Cổng tên WAN thuộc đường ra Internet, không hiện như cổng nội bộ.
+  const ports = tatCa.filter((g) => g.kind === 'port' && g !== wan && !an.has(g.id) && !/wan/i.test(g.name || '')).map(hienThi);
   const bridges = tatCa.filter((g) => g.kind === 'bridge' && !an.has(g.id)).map(hienThi);
   const pppKhac = tatCa.filter((g) => g.kind === 'ppp' && g !== wan && !an.has(g.id)).map(hienThi);
   return {
@@ -129,6 +136,18 @@ export function discover(states, cfg = {}) {
 // ───────────────────────── nút trung gian (switch, bộ phát WiFi) và gán thiết bị ─────────────────────────
 
 /** MAC «riêng tư» (bit 0x02 của byte đầu): điện thoại/máy bật địa chỉ ngẫu nhiên — dấu hiệu CẤU TRÚC (không phải danh sách tên) của máy dùng WiFi. */
+/**
+ * Tự vẽ bộ phát ZTE từ cảm biến số máy (thuộc tính clients) khi chưa khai bộ phát nào.
+ * Cần khai `zte_port`: cổng MikroTik nơi ZTE cắm. Không khai thì không tự thêm (card không đoán cổng).
+ */
+export function autoCauHinh(states = {}, cfg = {}) {
+  if (!cfg.zte_port || (cfg.access_points && cfg.access_points.length)) return cfg;
+  const id = Object.keys(states || {}).find((e) => /^sensor\..+_connected_devices$/.test(e)
+    && states[e] && states[e].attributes && Array.isArray(states[e].attributes.clients));
+  if (!id) return cfg;
+  return { ...cfg, access_points: [{ name: cfg.zte_name || 'ZTE WiFi', port: cfg.zte_port, clients_sensor: id }] };
+}
+
 export function macRiengTu(mac) {
   const m = /^([0-9a-f]{2})[:-]/i.exec(String(mac || ''));
   return !!m && (parseInt(m[1], 16) & 2) === 2;
@@ -536,7 +555,8 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
 
     _ve(ep = false) {
       if (!this._hass) return;
-      const model = discover(this._hass.states, this._cfg);
+      const cfgHl = autoCauHinh(this._hass.states, this._cfg);
+      const model = discover(this._hass.states, cfgHl);
       this._ui.states = this._hass.states;
       const chuKy = JSON.stringify([model, this._ui.search, this._ui.limit, this._cfg.language, this._ui.gan, this._ui.nodes, this._ui.edit,
         (this._cfg.access_points || []).map((a) => (a && a.entity && this._hass.states[a.entity] ? this._hass.states[a.entity].state : '')),
@@ -548,7 +568,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
       const dangTim = this.shadowRoot.activeElement && this.shadowRoot.activeElement.classList.contains('tim');
       const vt = dangTim ? this.shadowRoot.activeElement.selectionStart : 0;
       this._docForm();
-      this.shadowRoot.innerHTML = `<style>${CSS}</style>${renderHtml(model, this._cfg, this._ui)}`;
+      this.shadowRoot.innerHTML = `<style>${CSS}</style>${renderHtml(model, cfgHl, this._ui)}`;
       this._gan();
       const o = this.shadowRoot.querySelector('.tim');
       if (o && dangTim) { o.focus(); try { o.setSelectionRange(vt, vt); } catch (e) { /* bỏ qua */ } }
