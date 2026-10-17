@@ -481,9 +481,8 @@ function renderRouterBox(model, cfg, ui, t, hangCong) {
   const thanhVien = Array.isArray(ui.bridge) ? ui.bridge : (Array.isArray(cfg.bridge_ports) ? cfg.bridge_ports : macDinh);
   const br = bridges[0];
   const wanHtml = !wan ? '' : `<div class="nut-node wan-hop" data-anchor="isp-trong">
-      <div class="nt">${chamTrangThai(wan.running)}<span>${esc(cfg.isp_name || wan.comment || t.internet)}</span></div>
+      <div class="nt">${chamTrangThai(wan.running)}<span>${esc(cfg.isp_name || wan.comment || t.internet)}</span> <span class="phu">${esc(wanCong ? wanCong.name : wan.name)}</span></div>
       ${dongLuuLuong(wan.rx, wan.tx, t)}
-      <div class="phu">${esc(t.cong)} ${esc(wanCong ? wanCong.name : wan.name)}</div>
     </div>`;
   const bridgeHtml = `<div class="hop-con bridge-khoi" data-members="${esc(thanhVien.join(','))}">
       <div class="tieu-nhom">BRIDGE LAN</div>
