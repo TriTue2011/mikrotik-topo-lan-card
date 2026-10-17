@@ -675,7 +675,8 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .tree-hang{display:flex;gap:16px;align-items:flex-start;margin-bottom:10px}
 .nut-con.hop-chua>.nut-con{margin-top:8px}
 .dev-hop{border:1px solid var(--divider-color,#444);border-radius:10px;margin-bottom:6px}
-.tree-con{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
+.tree-con{display:grid;grid-template-columns:max-content;justify-content:start;gap:10px;flex:0 1 auto;min-width:0}
+.tree-con>*{min-width:0}
 .nut-con{border:1px solid var(--divider-color,#444);border-radius:12px;padding:8px 10px}
 .nut-con .nhom-may{margin:0 0 6px}
 .duong{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
