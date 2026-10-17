@@ -572,13 +572,17 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}" data-anchor="n-${esc(n.key)}" data-luu="0">
       <div class="tieu-nhom nhom-may">${n.kind === KIND_AP ? chamTrangThai(n.online) : ''}${n.kind === KIND_AP ? '📶 ' : '⇄ '}${esc(n.name)} (${esc(sl)})${n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : ''}</div>
       ${hien.map(hangMay).join('')}
-      ${con.map(nutCon).join('')}
     </div>`;
+  };
+  // Cây: mỗi nút là một hộp; nút con (cấp dưới) nằm ở cột bên phải, không lồng trong hộp cha.
+  const treeNode = (n) => {
+    const con = nut.filter((x) => x.parent === n.key);
+    return `<div class="tree-hang">${nutCon(n)}${con.length ? `<div class="tree-con">${con.map(treeNode).join('')}</div>` : ''}</div>`;
   };
   // Một nhánh = một cổng MikroTik, bên phải là các nút cắm vào cổng đó.
   const nhanhCong = (pt) => {
     const con = nut.filter((n) => !n.parent && chuanCong(n.port) === chuanCong(pt.name));
-    return con.length ? `<div class="nhanh"><div class="nhanh-ten phu">${esc(pt.name)}</div><div class="con">${con.map(nutCon).join('')}</div></div>` : '';
+    return con.map(treeNode).join('');
   };
   const chuaGan = nhomHien.filter((g) => !g.node && g.hien.length);
   // Nút gắn vào một cổng không hiện trên card (hoặc chưa khai cổng): vẫn hiện ở cuối, không mất.
@@ -605,8 +609,8 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
         <div class="tieu-nhom">${esc(t.clients)} (${esc(ds.length)})</div>
         <input class="tim" type="search" placeholder="${esc(t.search)}" value="${esc(ui.search || '')}" aria-label="${esc(t.search)}">
         ${ports.map(nhanhCong).join('')}
-        ${mocCon.length ? `<div class="nhanh"><div class="phu">${esc(t.ports)}</div><div class="con">${mocCon.map(nutCon).join('')}</div></div>` : ''}
-        ${chuaGan.length ? `<div class="nhanh"><div class="phu">LAN (${esc(chuaGan.reduce((x, g) => x + g.clients.length, 0))})</div><div class="con">${chuaGan.map((g) => g.hien.map(hangMay).join('')).join('')}</div></div>` : ''}
+        ${mocCon.map(treeNode).join('')}
+        ${chuaGan.length ? `<div class="nut-con sw"><div class="tieu-nhom nhom-may">LAN (${esc(chuaGan.reduce((x, g) => x + g.clients.length, 0))})</div>${chuaGan.map((g) => g.hien.map(hangMay).join('')).join('')}</div>` : ''}
         ${!ports.length && !chuaGan.length && !mocCon.length ? `<div class="phu">${esc(t.noClients)}</div>` : ''}
         ${nutXemThem}
       </div>
@@ -625,10 +629,9 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .nut-sua[aria-pressed="true"]{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
 .chip b,.lu b{color:var(--primary-color);margin-right:3px}
 .cay{position:relative;display:grid;grid-template-columns:minmax(300px,1fr) minmax(0,3fr);gap:24px;align-items:start}
-.nhanh{display:grid;grid-template-columns:minmax(240px,1fr) minmax(0,2fr);gap:14px;align-items:start;margin-bottom:10px}
-.nhanh>.con{display:flex;flex-direction:column;gap:8px}
+.tree-hang{display:flex;gap:16px;align-items:flex-start;margin-bottom:10px}
+.tree-con{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
 .nut-con{border:1px solid var(--divider-color,#444);border-radius:12px;padding:8px 10px}
-.nut-con .nut-con{margin:8px 0 0 12px}
 .nut-con .nhom-may{margin:0 0 6px}
 .duong{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
 .duong path{fill:none;stroke:var(--primary-color,#03a9f4);stroke-linecap:round;opacity:.55}
