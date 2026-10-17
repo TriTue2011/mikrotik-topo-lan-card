@@ -74,8 +74,20 @@ const slug = (s) => String(s || '').toLowerCase().replace(/\s+/g, '-').replace(/
  * Quy ước tên của tích hợp: sensor.<tiền_tố>_(port|bridge|ppp)_<id>_(rx|tx), binary_sensor.<tiền_tố>_…_connection,
  * sensor.<tiền_tố>_core_* và device_tracker.* có attribution «Mikrotik».
  */
+/**
+ * Tự nhận tiền tố từ tên thực thể cổng: switch.<tiền_tố>_port_<id>_port (MikroTik Extended).
+ * Không thấy thì null; khi đó discover dùng tiền tố mặc định hoặc cfg.prefix.
+ */
+export function detectPrefix(states = {}) {
+  for (const eid of Object.keys(states || {})) {
+    const m = /^switch\.(.+?)_port_.+_port$/.exec(eid);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 export function discover(states, cfg = {}) {
-  const tienTo = cfg.prefix || 'mikrotik_router';
+  const tienTo = cfg.prefix || detectPrefix(states) || 'mikrotik_router';
   const P = reEsc(tienTo);
   const reLuuLuong = new RegExp(`^sensor\\.${P}_(port|bridge|ppp)_(.+)_(rx|tx)$`);
   const reWg = new RegExp(`^sensor\\.${P}_wireguard_(.+)_(rx|tx)$`);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh, toBytes, fmtBytes } from '../mikrotik-topo-lan-card.js';
+import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh, toBytes, fmtBytes, detectPrefix } from '../mikrotik-topo-lan-card.js';
 
 const mang = JSON.parse(readFileSync(new URL('./fixtures/states.json', import.meta.url), 'utf8'));
 const states = Object.fromEntries(mang.map((s) => [s.entity_id, { state: s.state, attributes: s.attributes }]));
@@ -257,4 +257,16 @@ test('giao diện WireGuard (type wg, ví dụ mik-hk) không lẫn vào danh s�
   };
   const m = discover(st, {});
   assert.deepEqual(m.ports.map((p) => p.id), ['ether3']);
+});
+
+test('tự nhận tiền tố (không cần khai prefix): theo tên cổng switch của MikroTik Extended, kể cả tiền tố khác mặc định', () => {
+  const st = {
+    'switch.mikrotik_extended_port_ether3_port': { state: 'on', attributes: { name: 'ether3', type: 'ether', running: true, comment: '' } },
+    'switch.mikrotik_extended_ppp_pppoe_out1_port': { state: 'on', attributes: { name: 'pppoe-out1', type: 'pppoe-out', running: true, comment: 'ISP' } },
+  };
+  assert.equal(detectPrefix(st), 'mikrotik_extended');
+  const m = discover(st, {});
+  assert.equal(m.wan.name, 'pppoe-out1');
+  assert.deepEqual(m.ports.map((p) => p.id), ['ether3']);
+  assert.equal(detectPrefix({}), null);
 });
