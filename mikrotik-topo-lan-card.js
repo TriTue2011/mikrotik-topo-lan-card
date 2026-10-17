@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -331,6 +331,24 @@ export function thongTinWifi(cfg = {}, states = {}) {
 }
 
 /**
+ * Thiết bị mà nguồn có `node` báo nhưng MikroTik không có trong danh sách (đã ngắt trên MikroTik, hoặc chưa có tracker):
+ * thêm vào đúng hộp của nguồn, để số máy của hộp khớp số nguồn báo. Thông số lấy ngay từ nguồn (tên, IP, MAC).
+ */
+export function thietBiNguonThieu(cfg = {}, states = {}, clients = []) {
+  const co = new Set((clients || []).map((c) => macChuan(c.mac)));
+  const ra = [];
+  for (const g of layNguon(cfg, states)) {
+    if (!g.node) continue;
+    for (const d of g.devices) {
+      if (co.has(d.mac)) continue;
+      co.add(d.mac);
+      ra.push({ mac: d.mac, ip: d.ip, name: d.name || d.ip || d.mac, online: true, interface: '', source: '', tuNguon: true });
+    }
+  }
+  return ra;
+}
+
+/**
  * Giá trị một trường tùy chỉnh {entity, attribute?, extract?, unit?, template?}: lấy trạng thái hoặc thuộc tính,
  * trích bằng regex `extract` (nhóm 1 nếu có), rồi thêm đơn vị hoặc áp `template` ({value}).
  * Không có thực thể/giá trị (unknown, unavailable, rỗng) → null: trường đó ẩn, không chiếm chỗ.
@@ -557,9 +575,10 @@ const CHU = {
 // ───────────────────────── dựng HTML (thuần: nhận mô hình, trả chuỗi; mọi dữ liệu ngoài qua esc) ─────────────────────────
 
 const chamTrangThai = (ok) => `<span class="cham ${ok === true ? 'ok' : ok === false ? 'loi' : 'chua'}"></span>`;
-const thanh = (bps, toiDa = 1e8) => `<span class="thanh"><i style="width:${Math.min(100, Math.round((bps / toiDa) * 100))}%"></i></span>`;
+const thanh = (bps, toiDa = 1e8) => bps > 0 ? `<span class="thanh"><i style="width:${Math.min(100, Math.round((bps / toiDa) * 100))}%"></i></span>` : '';
 
 function dongLuuLuong(rx, tx, t) {
+  if (!(rx > 0) && !(tx > 0)) return '';
   return `<span class="lu"><b title="${esc(t.down)}">↓</b>${esc(fmtRate(rx))} <b title="${esc(t.up)}">↑</b>${esc(fmtRate(tx))}</span>`;
 }
 
@@ -582,7 +601,7 @@ function renderRouterBox(model, cfg, ui, t, hangCong) {
       ${dongLuuLuong(wan.rx, wan.tx, t)}
     </div>`;
   const bridgeHtml = `<div class="hop-con bridge-khoi" data-members="${esc(thanhVien.join(','))}">
-      ${br ? `<div class="hang bridge-tieu">${chamTrangThai(br.running)}<span class="ten">${esc((cfg.port_names || {})[br.id] || br.name || 'BridgeLAN')}</span>${dongLuuLuong(br.rx, br.tx, t)}${thanh(br.rx + br.tx)}</div>` : ''}
+      ${br ? `<div class="bridge-tieu">${chamTrangThai(br.running)}<span class="ten">${esc((cfg.port_names || {})[br.id] || br.name || 'BridgeLAN')}</span>${dongLuuLuong(br.rx, br.tx, t)}${thanh(br.rx + br.tx)}</div>` : ''}
       ${ports.map((g) => `<div class="chon-dong"><label class="chon-cong"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}></label>${hangCong(g)}</div>`).join('') || `<div class="phu">${esc(t.chuaCo)}</div>`}
     </div>`;
   return `${wanHtml}${bridgeHtml}`;
@@ -594,22 +613,28 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const tenRouter = cfg.router_name || t.router;
   const { core, wan, ports, bridges, ppp, tunnels, clients } = model;
   const coHop = (cfg.switches || []).length + (cfg.access_points || []).length + (cfg.hosts || []).length > 0;
+  // Không có dữ liệu MikroTik nào (chỉ dùng bộ phát/nguồn khác): bỏ hẳn cột router, không để hộp rỗng chiếm chỗ.
+  const coMik = !!(wan || ports.length || bridges.length || ppp.length || tunnels.length || (model.vpn && (model.vpn.ifaces.length || model.vpn.peers.length)) || core.cpu != null || core.ram != null || core.uptime || core.version);
   const coDuLieu = !!(wan || ports.length || bridges.length || tunnels.length || clients.length || core.cpu != null || coHop);
   if (!coDuLieu) return `<ha-card><div class="vo">${esc(t.none)}</div></ha-card>`;
 
   const tong = wan ? { rx: wan.rx, tx: wan.tx } : ports.reduce((s, p) => ({ rx: s.rx + p.rx, tx: s.tx + p.tx }), { rx: 0, tx: 0 });
   const online = clients.filter((c) => c.online).length;
   const loc = String(ui.search || '').trim().toLowerCase();
-  let ds = clients;
+  let ds = [...clients, ...thietBiNguonThieu(cfg, ui.states || {}, clients)];
   if (cfg.hide_offline_clients) ds = ds.filter((c) => c.online);
   if (loc) ds = ds.filter((c) => `${c.name} ${c.ip} ${c.mac}`.toLowerCase().includes(loc));
   const gioiHan = Math.max(5, Number(ui.limit || cfg.client_limit || 30));
   // Gán tay cũ đã lưu trong trình duyệt không còn dùng; nguồn của thiết bị khai bằng device_sources trong cấu hình.
   const { nut, nhom } = phanNhom(ds, cfg, {}, ui.states || {}, ui.nodes || []);
   let conLai = cfg.show_clients === false ? 0 : gioiHan;
-  const nhomHien = nhom.filter((g) => g.clients.length || g.node).map((g) => {
-    const hien = g.clients.slice(0, Math.max(0, conLai)); conLai -= hien.length; return { ...g, hien };
-  });
+  // Giới hạn số máy hiện: hộp có nguồn riêng (bộ phát WiFi…) được chia chỗ trước, phần còn lại (LAN, switch mặc định) lấy phần dư.
+  const uuTien = (g) => (g.node && g.node.kind === KIND_AP ? 0 : 1);
+  const hienTheo = new Map();
+  for (const g of [...nhom].sort((x, y) => uuTien(x) - uuTien(y))) {
+    const hien = g.clients.slice(0, Math.max(0, conLai)); conLai -= hien.length; hienTheo.set(g, hien);
+  }
+  const nhomHien = nhom.filter((g) => g.clients.length || g.node).map((g) => ({ ...g, hien: hienTheo.get(g) }));
   const hienClients = nhomHien.flatMap((g) => g.hien);
 
   const hangCong = (g) => `
@@ -618,7 +643,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     </div>`;
   const hangWg = (h) => `
     <div class="hang ham ${h.connected ? '' : 'off'}" title="${esc(h.name)}">
-      ${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span>${h.batTay != null ? `<span class="lu">${esc(t.batTay)} ${esc(Math.round(h.batTay))} s ${esc(t.truoc)}</span>` : ''}<span class="lu">↓ ${esc(fmtBytes(h.rxTong))} ↑ ${esc(fmtBytes(h.txTong))}</span>
+      ${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span>${h.batTay != null ? `<span class="lu">${esc(t.batTay)} ${esc(Math.round(h.batTay))} s ${esc(t.truoc)}</span>` : ''}${h.rxTong > 0 || h.txTong > 0 ? `<span class="lu">↓ ${esc(fmtBytes(h.rxTong))} ↑ ${esc(fmtBytes(h.txTong))}</span>` : ''}
     </div>`;
   // Khối VPN: giao diện WireGuard (mik-hk, wg-home…) với các peer của nó. Peer có 0.0.0.0/0 là đường đi RA Internet
   // qua VPN (router mượn Internet); còn lại là truy cập TỪ XA vào mạng nhà.
@@ -628,15 +653,19 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     if (!ifaces.length && !peers.length) return '';
     const daGan = new Set();
     const khoi = ifaces.map((g) => {
-      const ps = peers.filter((p) => chuan(p.iface) === chuan(g.id) || chuan(p.iface) === chuan(g.name));
-      ps.forEach((p) => daGan.add(p.id));
-      const raNet = ps.some((p) => /0\.0\.0\.0\/0/.test(p.allowed || ''));
+      const tatCa = peers.filter((p) => chuan(p.iface) === chuan(g.id) || chuan(p.iface) === chuan(g.name));
+      tatCa.forEach((p) => daGan.add(p.id));
+      // Không bật (giao diện tắt, hoặc peer không kết nối) thì ẩn, không chiếm chỗ.
+      if (g.running === false) return '';
+      const ps = tatCa.filter((p) => p.connected);
+      const raNet = tatCa.some((p) => /0\.0\.0\.0\/0/.test(p.allowed || ''));
       return `<div class="vpn-khoi ${raNet ? 'ra' : 'vao'}">
         <div class="hang vpn-cong">${chamTrangThai(g.running)}<span class="ten">${esc(g.label)}</span><span class="lu">${esc(raNet ? t.vpnRa : t.vpnVao)}</span>${dongLuuLuong(g.rx, g.tx, t)}</div>
         ${ps.map(hangWg).join('')}
       </div>`;
     }).join('');
-    const leLoi = peers.filter((p) => !daGan.has(p.id));
+    const leLoi = peers.filter((p) => !daGan.has(p.id) && p.connected);
+    if (!khoi && !leLoi.length) return '';
     return `<div class="tieu-nhom">${esc(t.wgTitle)}</div>${khoi}${leLoi.map(hangWg).join('')}`;
   })();
   const hangHam = (h) => `
@@ -649,16 +678,19 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     if (!w) return '';
     const nhan = [w.band, w.rssi != null ? `${w.rssi} dBm` : '', w.mode].filter(Boolean).join(' · ');
     // Tốc độ TX/RX của máy WiFi: hiện như cổng (↓ ↑ và thanh), tách khỏi băng tần/RSSI.
-    const toc = w.rxRate != null || w.txRate != null ? `${dongLuuLuong(w.rxRate || 0, w.txRate || 0, t)}${thanh((w.rxRate || 0) + (w.txRate || 0))}` : '';
+    const toc = (w.rxRate || 0) > 0 || (w.txRate || 0) > 0 ? `${dongLuuLuong(w.rxRate || 0, w.txRate || 0, t)}${thanh((w.rxRate || 0) + (w.txRate || 0))}` : '';
     return `${nhan ? `<span class="goi" title="${esc(w.mode)}">${esc(nhan)}</span>` : ''}${toc}`;
   };
   const chipTruong = (ds) => (Array.isArray(ds) ? ds : []).map((f) => {
     const v = giaTriTruong(f, ui.states || {});
     return v == null ? '' : `<span class="goi">${esc(f.label ? `${f.label} ` : '')}${esc(v)}</span>`;
   }).join('');
+  const tenMay = (c) => (cfg.device_names || {})[macChuan(c.mac)] || c.name;
+  // Thông số của một thiết bị (băng tần, tốc độ, trường khai thêm, IP, MAC): dùng chung cho hàng thiết bị và tiêu đề hộp to.
+  const thongSoMay = (c) => `${chipWifi(c)}${chipTruong((cfg.device_fields || {})[macChuan(c.mac)])}${c.interface && !/bridge/i.test(c.interface) ? `<span class="goi" title="MikroTik">${esc(c.interface)}</span>` : ''}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.mac)}</span><span class="lu">${esc(c.ip)}</span>`;
   const hangMay = (c) => `
     <div class="hang may ${c.online ? '' : 'off'}" title="${esc(c.mac)} · ${esc(c.interface)} · ${esc(c.source)}">
-      ${chamTrangThai(c.online)}<span class="ten">${esc((cfg.device_names || {})[macChuan(c.mac)] || c.name)}</span>${chipWifi(c)}${chipTruong((cfg.device_fields || {})[macChuan(c.mac)])}${c.interface && !/bridge/i.test(c.interface) ? `<span class="goi" title="MikroTik">${esc(c.interface)}</span>` : ''}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.mac)}</span><span class="lu">${esc(c.ip)}</span>
+      ${chamTrangThai(c.online)}<span class="ten">${esc(tenMay(c))}</span>${thongSoMay(c)}
     </div>`;
   const tieuDeNhom = (g) => {
     const n = g.node;
@@ -690,18 +722,30 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   // Mỗi thiết bị là một hộp nhỏ riêng; nét đứt đi từ nguồn đã cài tới hộp đó.
   const hopMay = (c, anchor) => `<div class="dev-hop" data-anchor="${anchor}" data-luu="0">${hangMay(c)}</div>`;
   const nhomCua = (n) => nhomHien.find((x) => x.node && x.node.key === n.key);
+  // Chủ hộp: thiết bị trùng IP của hộp (ZTE tự lấy IP từ cảm biến chính); hộp to không khai IP thì lấy thiết bị đầu tiên.
+  const chuCua = (n) => {
+    const g = nhomCua(n);
+    if (!g || !hienMay || n.guest) return null;
+    return g.hien.find((c) => c.ip && n.ips.includes(c.ip)) || (n.box ? g.hien[0] || null : null);
+  };
+  // Số LXC/VM nằm trong hộp to (tính cả các hộp lồng bên trong).
+  const demCon = (n) => nut.filter((x) => x.host === n.key).reduce((t, x) => t + (x.guest ? 1 : demCon(x)), 0);
   const nutCon = (n, inner = '') => {
     const g = nhomCua(n);
     if (n.guest) {
       const c = g && g.hien[0] ? g.hien[0] : { mac: n.macs[0], name: n.name, ip: '', online: true, interface: '', source: '' };
       return hopMay(c, `n-${esc(n.key)}`);
     }
-    const sl = g ? g.clients.length : 0;
+    const chu = chuCua(n);
+    const sl = g ? g.clients.length - (chu && !n.box ? 1 : 0) : 0;
     const truong = chipTruong(n.fields);
-    let rows = n.box && g && hienMay ? g.hien.map(hangMay).join('') : '';
-    if (n.box && !rows && (n.ips.length || n.macs.length)) rows = `<div class="hop-dong phu">${esc([n.ips[0], n.macs[0]].filter(Boolean).join(' · '))}</div>`;
+    // Thiết bị của chính hộp (Proxmox, ZTE…) là «chủ hộp»: thông số nằm ngay tiêu đề hộp to, không có hàng riêng, không tính vào số máy.
+    const rows = n.box && g && hienMay ? g.hien.filter((c) => c !== chu).map(hangMay).join('') : '';
+    const thongSoChu = chu ? thongSoMay(chu) : (n.box && (n.ips.length || n.macs.length) ? `<span class="lu">${esc(n.macs[0] || '')}</span><span class="lu">${esc(n.ips[0] || '')}</span>` : '');
+    const xoaNut = n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : '';
+    const dem = ` (${esc(n.box ? demCon(n) : sl)})`;
     return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}${n.box ? ' hop-chua' : ''}" data-anchor="n-${esc(n.key)}" data-luu="0">
-      <div class="tieu-nhom nhom-may">${n.kind === KIND_AP ? chamTrangThai(n.online) : ''}${n.kind === KIND_AP ? '📶 ' : '⇄ '}${esc(n.name)} (${esc(sl)})${n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : ''}</div>
+      <div class="tieu-nhom nhom-may${n.box || chu ? ' hop-tieu-to' : ''}">${n.kind === KIND_AP || chu ? chamTrangThai(chu ? chu.online : n.online) : ''}${n.kind === KIND_AP ? '📶 ' : n.box ? '' : '⇄ '}<span class="ten-hop">${esc(n.name)}${dem}</span>${thongSoChu}${xoaNut}</div>
       ${truong ? `<div class="hop-dong">${truong}</div>` : ''}
       ${rows}
       ${inner}
@@ -714,7 +758,8 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     const trong = nut.filter((x) => x.host === n.key).map(treeNode).join('');
     const kids = nut.filter((x) => x.parent === n.key && !x.host);
     const g = nhomCua(n);
-    const devs = (!n.box && g && hienMay) ? g.hien.map((c) => hopMay(c, `dev-${esc(macChuan(c.mac))}`)) : [];
+    const chu = chuCua(n);
+    const devs = (!n.box && g && hienMay) ? g.hien.filter((c) => c !== chu).map((c) => hopMay(c, `dev-${esc(macChuan(c.mac))}`)) : [];
     const phai = [...kids.map(treeNode), ...devs].join('');
     return `<div class="tree-hang">${nutCon(n, trong)}${phai ? `<div class="tree-con">${phai}</div>` : ''}</div>`;
   };
@@ -729,13 +774,13 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
 
   return `<ha-card>
     <div class="dau"><div class="td">${esc(tieuDe)}</div>
-      <div class="chip"><b>↓</b>${esc(fmtRate(tong.rx))}</div><div class="chip"><b>↑</b>${esc(fmtRate(tong.tx))}</div>
-      <div class="chip">${esc(online)}/${esc(clients.length)} ${esc(t.online)}</div>
+      ${tong.rx > 0 ? `<div class="chip"><b>↓</b>${esc(fmtRate(tong.rx))}</div>` : ''}${tong.tx > 0 ? `<div class="chip"><b>↑</b>${esc(fmtRate(tong.tx))}</div>` : ''}
+      ${clients.length ? `<div class="chip">${esc(online)}/${esc(clients.length)} ${esc(t.online)}</div>` : ''}
       ${cfg.show_clients === false ? '' : `<button class="chip nut-sua" data-act="sua" aria-pressed="${ui.edit ? 'true' : 'false'}" title="${esc(t.edit)}" aria-label="${esc(t.edit)}">✎</button>`}</div>
     ${bang}
-    <div class="cay">
+    <div class="cay${coMik ? '' : ' mot-cot'}">
       <svg class="duong" aria-hidden="true"></svg>
-      <div class="cot cot-router">
+      ${coMik ? `<div class="cot cot-router">
         <div class="nut-node chinh" data-anchor="router">
           <div class="nt"><span>${esc(tenRouter)}</span></div>
           <div class="phu">${core.cpu != null ? `${esc(t.cpu)} ${esc(core.cpu)}%` : ''} ${core.ram != null ? `· ${esc(t.ram)} ${esc(core.ram)}%` : ''}</div>
@@ -743,7 +788,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
         ${renderRouterBox(model, cfg, ui, t, hangCong)}
         </div>
         ${vpnHtml}
-      </div>
+      </div>` : ''}
       <div class="cot cot-cong">
         <div class="tieu-nhom">${esc(t.clients)} (${esc(ds.length)})</div>
         <input class="tim" type="search" placeholder="${esc(t.search)}" value="${esc(ui.search || '')}" aria-label="${esc(t.search)}">
@@ -767,6 +812,7 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .nut-sua{cursor:pointer}
 .nut-sua[aria-pressed="true"]{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
 .chip b,.lu b{color:var(--primary-color);margin-right:3px}
+.cay.mot-cot{grid-template-columns:minmax(0,1fr)}
 .cay{position:relative;display:grid;grid-template-columns:minmax(300px,1fr) minmax(0,3fr);gap:24px;align-items:start}
 .tree-hang{display:flex;gap:16px;align-items:flex-start;margin-bottom:10px}
 .nut-con.hop-chua>.nut-con{margin-top:8px}
@@ -775,6 +821,10 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .tree-con>*{min-width:0}
 .nut-con{border:1px solid var(--divider-color,#444);border-radius:12px;padding:8px 10px}
 .nut-con .nhom-may{margin:0 0 6px}
+.bridge-tieu{display:flex;align-items:center;gap:6px;font-size:13px;min-width:0}
+.bridge-tieu .ten{font-weight:600}
+.hop-tieu-to{flex-wrap:wrap;text-transform:none;font-size:13px;letter-spacing:0}
+.hop-tieu-to .ten-hop{font-weight:600}
 .duong{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
 .duong path{fill:none;stroke:var(--primary-color,#03a9f4);stroke-linecap:round;opacity:.55}
 .duong path.chay{stroke-dasharray:6 8;animation:chay linear infinite}

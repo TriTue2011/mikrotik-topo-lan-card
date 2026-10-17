@@ -1,5 +1,12 @@
 # Lịch sử thay đổi
 
+## 0.6.0
+- **Thông số của chính hộp nằm ngay tiêu đề hộp to**: MAC, IP, tốc độ của Proxmox hoặc router ZTE hiện ở tiêu đề hộp, không còn hộp/hàng riêng. Proxmox hiện tổng số LXC/VM bên trong.
+- **ZTE WiFi đủ máy**: máy ZTE báo mà MikroTik không có vẫn vào hộp, nên số máy khớp số ZTE báo; hộp có nguồn riêng được chia chỗ hiển thị trước.
+- **Bridge LAN**: tên và tốc độ là tiêu đề của hộp to, không còn khung hàng riêng.
+- **Ẩn khi không có**: tốc độ rx/tx bằng 0 (thiết bị, cổng, WAN, VPN), VPN không bật hoặc peer không kết nối, chip tổng bằng 0 trên đầu card, và cả cột MikroTik khi không có dữ liệu MikroTik (chỉ dùng ZTE).
+- **Cấu hình mẫu** trong `examples/`: chỉ MikroTik, chỉ ZTE, MikroTik + ZTE, đa dụng đầy đủ.
+
 ## 0.5.0
 - **Cấu hình đa dụng**: thông số lấy từ trạng thái hoặc thuộc tính của bất kỳ thực thể nào.
   - `sources`: danh sách thiết bị từ thuộc tính (danh sách đối tượng có `map`, hoặc chuỗi tách bằng `separator` và `pattern` regex có nhóm tên).

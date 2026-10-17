@@ -150,6 +150,16 @@ Mỗi trường: `entity`, `attribute` (tuỳ chọn), `extract` (regex, lấy n
 
 **Tên và nguồn thiết bị** — `port_names` (tên cổng, bridge), `device_names` (tên thiết bị theo MAC), `device_sources` (thiết bị → tên hộp; chọn trong Sửa thẻ → Thiết bị), `default_source` (nguồn cho thiết bị có dây chưa chọn).
 
+## Cấu hình mẫu
+Bốn tệp trong thư mục [`examples/`](examples/), chép vào YAML của card rồi đổi tên thực thể, IP cho khớp nhà bạn:
+
+| Tệp | Dùng khi |
+|---|---|
+| `1-chi-mikrotik.yaml` | Chỉ có MikroTik |
+| `2-chi-zte.yaml` | Chỉ có bộ phát ZTE (zte_tracker), không có MikroTik |
+| `3-mikrotik-va-zte.yaml` | MikroTik + switch + ZTE |
+| `4-da-dung-day-du.yaml` | Đầy đủ: switch, ZTE, Proxmox (LXC/VM), nguồn và trường tuỳ chỉnh, đặt tên thiết bị |
+
 ## Giấy phép
 MIT.
 

@@ -1,0 +1,14 @@
+# MikroTik + ZTE: ZTE cắm vào một switch của MikroTik; máy WiFi lấy từ ZTE, máy có dây từ MikroTik.
+type: custom:mikrotik-topo-lan-card
+title: Mạng LAN nhà
+prefix: mikrotik_router
+port_names: { ether2: SW1, ether3: SW2 }
+switches:
+  - { name: SW1, port: ether2 }
+  - { name: SW2, port: ether3 }
+access_points:
+  - name: ZTE WiFi
+    switch: SW2                                                 # ZTE cắm vào SW2
+    ips: [192.168.1.1]                                          # trùng IP router ZTE trong danh sách MikroTik → thông số vào tiêu đề hộp
+    clients_sensor: sensor.zte_router_192_168_1_1_connected_devices
+default_source: SW2                                             # máy có dây chưa rõ nguồn → SW2

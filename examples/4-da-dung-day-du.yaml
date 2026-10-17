@@ -1,0 +1,51 @@
+# Đa dụng, đầy đủ: MikroTik + 2 switch + ZTE + Proxmox (LXC/VM tự thành hộp con) + nguồn tuỳ chỉnh + trường tuỳ chỉnh.
+# Thông số nào không có giá trị (hoặc bằng 0) thì ẩn, không chiếm chỗ.
+type: custom:mikrotik-topo-lan-card
+title: Mạng LAN nhà
+prefix: mikrotik_router
+router_name: MikroTik
+isp_name: Nhà mạng
+port_names:
+  ether2: SW1
+  ether3: SW2
+  bridgelan: BRIDGE LAN
+mac_sensor: sensor.mikrotik_bang_mac        # (tuỳ chọn) bảng MAC theo cổng: tự biết máy nào sau cổng nào
+
+switches:
+  - { name: SW1, port: ether2 }
+  - { name: SW2, port: ether3 }
+
+access_points:
+  - name: ZTE WiFi
+    switch: SW2
+    ips: [192.168.1.1]
+    clients_sensor: sensor.zte_router_192_168_1_1_connected_devices
+    fields:
+      - { label: Mẫu, entity: sensor.zte_router_192_168_1_1, attribute: model }
+
+hosts:                                       # hộp to chứa hộp con, lồng nhiều tầng được
+  - name: Proxmox                            # tên tuỳ ý: NAS, server…
+    ip: 192.168.88.100
+    switch: SW1
+    guest_mac_prefix: "bc:24:11"             # máy có tiền tố MAC này tự thành hộp LXC/VM bên trong
+    guest_source: SW1                        # nét đứt của LXC/VM đi tới nguồn này
+    fields:
+      - { label: CPU, entity: sensor.pve_cpu, unit: "%" }
+      - { label: RAM, entity: sensor.pve_ram, attribute: used, template: "{value} GB" }
+
+sources:                                     # nguồn thiết bị tuỳ chỉnh (thuộc tính dạng danh sách hoặc chuỗi)
+  - node: SW1
+    entity: sensor.camera_list
+    attribute: devices
+    pattern: '^(?<mac>[0-9A-Fa-f:]{17})\((?<name>.+)-(?<ip>[0-9.]+)\)$'
+
+device_names:                                # đặt tên thiết bị theo MAC
+  "aa:bb:cc:dd:ee:01": Tivi phòng khách
+device_sources:                              # chọn nguồn cho thiết bị theo MAC
+  "aa:bb:cc:dd:ee:01": SW2
+device_fields:                               # trường riêng cho thiết bị
+  "aa:bb:cc:dd:ee:01":
+    - { label: Nguồn điện, entity: sensor.tv_power, unit: W }
+default_source: SW2
+client_limit: 30
+hide_offline_clients: true

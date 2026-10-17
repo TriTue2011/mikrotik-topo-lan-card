@@ -1,0 +1,11 @@
+# Chỉ MikroTik (tích hợp MikroTik Extended). Card tự nhận WAN, cổng, bridge, WireGuard và thiết bị.
+type: custom:mikrotik-topo-lan-card
+title: Mạng LAN nhà
+prefix: mikrotik_router          # tiền tố thực thể của tích hợp
+isp_name: Nhà mạng               # tên hiển thị cho hộp WAN
+port_names:                      # đặt tên cổng / bridge theo ý bạn
+  ether2: Switch phòng khách
+  ether3: Switch phòng ngủ
+  bridgelan: BRIDGE LAN
+client_limit: 20
+hide_offline_clients: true

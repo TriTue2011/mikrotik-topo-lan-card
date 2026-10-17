@@ -482,3 +482,23 @@ test('trường tùy chỉnh: lấy từ trạng thái hoặc thuộc tính, tr�
   assert.match(html, /CPU 12\.5 %/);
   assert.doesNotMatch(html, /Ẩn/, 'trường không có giá trị không chiếm chỗ');
 });
+
+test('thiết bị có rx/tx bằng 0 thì không hiện mũi tên tốc độ; có tốc độ thật thì hiện', () => {
+  const mk = (rx, tx) => ({ 'sensor.z': { state: '1', attributes: { clients: [{ mac: '02:00:00:00:00:41', name: 'May Z', band: '5G', rx_rate: rx, tx_rate: tx }] } } });
+  const cfg = { access_points: [{ name: 'ZTE WiFi', clients_sensor: 'sensor.z' }] };
+  const model = { core: {}, wan: null, ports: [], bridges: [], ppp: [], tunnels: [], clients: [{ mac: '02:00:00:00:00:41', name: 'May Z', ip: '', online: true, interface: '', source: '' }] };
+  const lay = (st) => renderHtml(model, cfg, { states: st });
+  const khong = lay(mk(0, 0));
+  const co = lay(mk(1200, 800));
+  assert.ok(khong.includes('May Z') && !khong.includes('class="lu"><b'), 'rx/tx = 0 phải ẩn');
+  assert.ok(co.includes('class="lu"><b'), 'có tốc độ thật thì hiện');
+});
+
+test('VPN: giao diện không bật hoặc peer không kết nối thì ẩn; tốc độ bằng 0 không hiện', () => {
+  const m = discover(states, {});
+  const tat = (m.vpn.ifaces.concat(m.vpn.peers)).filter((x) => x.running === false || x.connected === false);
+  assert.ok(tat.length, 'fixture phải có mục VPN đang tắt để kiểm');
+  const html = renderHtml(m, {}, { states });
+  for (const x of tat) assert.ok(!html.includes(`title="${x.name}"`) && !html.includes(`<span class="ten">${x.label || x.name}</span>`), `${x.name} đang tắt phải ẩn`);
+  assert.ok(!/↓<\/b>0 <b[^>]*>↑<\/b>0</.test(html), 'tốc độ ↓0 ↑0 không được hiện');
+});

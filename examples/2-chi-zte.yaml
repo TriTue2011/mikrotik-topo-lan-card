@@ -1,0 +1,11 @@
+# Chỉ bộ phát WiFi ZTE (tích hợp zte_tracker), không cần MikroTik.
+# Hộp ZTE lấy danh sách máy từ thuộc tính `clients` của cảm biến, thông số của chính ZTE từ cảm biến chính.
+type: custom:mikrotik-topo-lan-card
+title: WiFi nhà
+access_points:
+  - name: ZTE WiFi
+    ips: [192.168.1.1]                                          # IP của router ZTE
+    clients_sensor: sensor.zte_router_192_168_1_1_connected_devices
+    fields:
+      - { label: Mẫu, entity: sensor.zte_router_192_168_1_1, attribute: model }
+      - { label: Đang dùng, entity: sensor.zte_router_192_168_1_1, attribute: active_devices }
