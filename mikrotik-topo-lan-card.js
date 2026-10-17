@@ -601,7 +601,7 @@ export function phanNhom(clients, cfg = {}, gan = {}, states = {}, userNodes = [
     const ds = cacNguon.filter((g) => g.node && g.node === n.name).flatMap((g) => g.devices.map((d) => d.mac));
     if (ds.length) n.macs = [...n.macs, ...ds];
   }
-  // Chính router của bộ phát (ví dụ ZTE 172.16.10.24) là thiết bị của nó, không phải máy LAN: lấy IP từ cảm biến chính
+  // Chính router của bộ phát (ví dụ ZTE 192.168.88.24) là thiết bị của nó, không phải máy LAN: lấy IP từ cảm biến chính
   // sensor.<tên>_connected_devices → sensor.<tên> (thuộc tính host).
   for (const n of nut) {
     if (!n.clientsSensor) continue;

@@ -1,21 +1,101 @@
 # MikroTik Topo LAN Card
 
-Card Lovelace cho Home Assistant vẽ **sơ đồ mạng LAN của router MikroTik**: Internet → MikroTik → cổng / bridge / VPN → thiết bị.
-Đọc thẳng thực thể của tích hợp MikroTik trong Home Assistant — **không cần SNMP**, không cần pfSense, không cần plugin giao diện.
+Card Lovelace cho Home Assistant vẽ **sơ đồ mạng LAN của router MikroTik**: Internet → MikroTik → bridge/cổng → switch, bộ phát WiFi (ZTE…) → từng thiết bị,
+kèm tốc độ thời gian thực, nối bằng **nét đứt**. Không cần plugin giao diện nào khác.
 
-> Ý tưởng sơ đồ cây lấy cảm hứng từ [doanlong1412/snmp-topo-lan-card](https://github.com/doanlong1412/snmp-topo-lan-card) (MIT). Card này viết lại cho MikroTik, nguồn dữ liệu khác (tích hợp MikroTik thay cho SNMP Switch Manager).
+> Ý tưởng sơ đồ cây lấy cảm hứng từ [doanlong1412/snmp-topo-lan-card](https://github.com/doanlong1412/snmp-topo-lan-card) (MIT). Card này viết lại cho MikroTik và nguồn dữ liệu khác.
+
+**Cách dùng khuyến nghị:** card + tích hợp [`mikrotik_snmp`](https://github.com/TriTue2011/mikrotik_snmp) (MikroTik qua SNMPv3 chỉ đọc + ZTE E2633). Thiết bị mới vào mạng **tự xuất hiện và tự nối** vào sơ đồ, không phải khai từng máy.
+
+## Mục lục
+[Yêu cầu](#yêu-cầu) · [Cài đặt](#cài-đặt) · [Cập nhật và kiểm phiên bản](#cập-nhật-và-kiểm-phiên-bản) · [Bắt đầu nhanh](#bắt-đầu-nhanh-khuyến-nghị) ·
+[Đọc sơ đồ](#đọc-sơ-đồ) · [Hiệu năng](#hiệu-năng-trên-thiết-bị-yếu) · [Khắc phục sự cố](#khắc-phục-sự-cố) · [Tuỳ chọn](#tuỳ-chọn) · [Cách cũ](#cách-cũ-tích-hợp-mikrotik-extended-không-khuyến-nghị)
 
 ## Yêu cầu
-- Home Assistant 2024.11 trở lên và RouterOS 7 trở lên (theo MikroTik Extended); cài tích hợp ZTE thì cần Home Assistant 2025.1 trở lên.
-- Tích hợp MikroTik tạo các thực thể kiểu `sensor.<tiền_tố>_port_<id>_rx|tx`, `binary_sensor.<tiền_tố>_port_<id>_connection`, `sensor.<tiền_tố>_core_cpu_load`, `device_tracker.*`
-  (ví dụ tích hợp **MikroTik Extended**; tiền tố mặc định `mikrotik_router`).
+- Home Assistant **2024.11** trở lên, trình duyệt hiện đại (Chrome, Edge, Firefox, Safari mới) hoặc app Home Assistant.
+- Một nguồn dữ liệu: tích hợp `mikrotik_snmp` (khuyến nghị), hoặc tích hợp MikroTik khác tạo thực thể kiểu `sensor.<tiền_tố>_port_<id>_rx|tx` (xem [Cách cũ](#cách-cũ-tích-hợp-mikrotik-extended-không-khuyến-nghị)).
 
 ## Cài đặt
-**HACS:** Custom repositories → URL repo này → loại *Dashboard* → cài → tải lại trình duyệt (`Ctrl+Shift+R`).
-**Thủ công:** chép `mikrotik-topo-lan-card.js` vào `/config/www/community/mikrotik-topo-lan-card/`, rồi Settings → Dashboards → Resources:
+**Qua HACS (khuyến nghị):**
+1. HACS → ⋮ → **Kho tuỳ chỉnh** → dán `https://github.com/TriTue2011/mikrotik-topo-lan-card`, loại **Dashboard** (Giao diện) → Thêm.
+2. Tìm «MikroTik Topo LAN Card» → **Tải xuống** → tải lại trình duyệt (`Ctrl+Shift+R`).
+3. HACS tự thêm tài nguyên. Kiểm: Cài đặt → Bảng điều khiển → ⋮ → **Tài nguyên** phải có `/hacsfiles/mikrotik-topo-lan-card/mikrotik-topo-lan-card.js` loại *JavaScript module*.
+
+**Thủ công:** chép `mikrotik-topo-lan-card.js` (lấy ở trang *Releases*) vào `/config/www/community/mikrotik-topo-lan-card/`, rồi thêm tài nguyên
 `/local/community/mikrotik-topo-lan-card/mikrotik-topo-lan-card.js` loại *JavaScript module*.
 
-## Cài tích hợp MikroTik Extended
+## Cập nhật và kiểm phiên bản
+Sau khi HACS cập nhật card, **trình duyệt và app Home Assistant hay giữ bản cũ trong bộ nhớ đệm**: giao diện vẫn là bản cũ dù đã «cập nhật». Làm đủ các bước:
+1. HACS → card → **Tải lại/Cập nhật** tới phiên bản mới nhất.
+2. Máy tính: `Ctrl+Shift+R`. Nếu vẫn cũ: `F12` → tab *Network* → tick *Disable cache* → tải lại.
+3. App Home Assistant (điện thoại, máy tính bảng): Cài đặt app → *Khắc phục sự cố* → **Đặt lại bộ nhớ đệm giao diện** (Reset frontend cache), rồi mở lại app.
+4. **Kiểm phiên bản đang chạy** (từ 0.8.4): mở console (`F12` → *Console*) và tìm dòng `MIKROTIK-TOPO-LAN-CARD v0.8.x`. Không thấy dòng này nghĩa là card chưa nạp, hoặc đang chạy bản cũ hơn 0.8.4.
+
+## Bắt đầu nhanh (khuyến nghị)
+**1. Cài tích hợp `mikrotik_snmp`** theo [README của nó](https://github.com/TriTue2011/mikrotik_snmp): chuẩn bị SNMPv3 chỉ đọc trên MikroTik, thêm tích hợp (nhớ **Tiền tố**, mặc định `mikrotik_router`), tuỳ chọn thêm ZTE và API chỉ đọc.
+
+**2. Thêm card.** Trang tổng quan → ⋮ → Chỉnh sửa → **Thêm thẻ** → *Thủ công*, dán:
+```yaml
+type: custom:mikrotik-topo-lan-card
+prefix: mikrotik_router                               # trùng Tiền tố của tích hợp
+topo_sensor: sensor.mikrotik_router_cay_thiet_bi      # card tự dựng hộp và nối thiết bị
+```
+Kiểm trước: Công cụ phát triển → Trạng thái → gõ `cay_thiet_bi`: phải có `sensor.<tiền_tố>_cay_thiet_bi` với thuộc tính `nodes` và `clients`. Không có thì card trống: sai tiền tố, hoặc tích hợp chưa chạy.
+
+**3. Đặt tên hộp theo ý anh (tuỳ chọn).** Dùng `switches` (tên hộp bên phải, theo cổng); hộp MikroTik bên trái vẫn giữ tên cổng gốc `ether2`, `ether3`…:
+```yaml
+type: custom:mikrotik-topo-lan-card
+prefix: mikrotik_router
+topo_sensor: sensor.mikrotik_router_cay_thiet_bi
+switches:
+  - { name: SW1, port: ether2 }      # đổi ether2, ether3 thành cổng thật của anh
+  - { name: SW2, port: ether3 }
+```
+`port_names` (ví dụ `{ ether2: SW1 }`) đổi **cả nhãn cổng trong hộp MikroTik**; nếu muốn giữ tên cổng gốc thì dùng `switches` như trên.
+Hộp anh đã khai (`switches`, `access_points`) được giữ nguyên, card chỉ **thêm hộp còn thiếu**, không tạo trùng.
+
+## Đọc sơ đồ
+- **Cột trái, hộp MikroTik**: tên router kèm **số thiết bị** `(n)`, CPU/RAM, thời gian chạy; hộp *Internet* (cổng WAN, tốc độ ↓↑); hộp *bridge* chứa các cổng với tốc độ, chấm xanh = đang nối, đỏ = ngắt.
+- **Cột phải**: hộp theo cổng (switch) hoặc bộ phát WiFi, và từng thiết bị bên trong: tên, băng tần, tín hiệu (dBm), tốc độ ↓↑, MAC, IP. Chấm `◌` cạnh thiết bị = MAC «riêng tư» (địa chỉ ngẫu nhiên của điện thoại).
+- **Nét đứt có chấm ở nguồn**: đi ra từ **đúng hàng cổng** (ví dụ `ether2`) trong hộp MikroTik tới hộp của nó, từ hộp tới bộ phát WiFi, rồi tới **từng thiết bị**. Nhờ đó nhìn là biết máy nào cắm cổng nào, qua ZTE hay không.
+- Nét đứt **chạy** khi cổng có lưu lượng; tắt ở máy yếu (xem [Hiệu năng](#hiệu-năng-trên-thiết-bị-yếu)).
+- Màn hình **hẹp** (dưới 820 px, điện thoại dọc): card chuyển một cột và **không vẽ đường nối**; xoay ngang hoặc dùng cửa sổ rộng hơn để thấy nét đứt.
+- Nút **✎** ở đầu card: thêm/xoá switch, bộ phát tay, gán thiết bị (xem mục «Tự thêm switch và bộ phát WiFi»).
+- Muốn tìm một thiết bị trong danh sách dài: dùng nút **Xem thêm** (card hiện `client_limit` thiết bị đầu, mặc định 30).
+
+## Hiệu năng trên thiết bị yếu
+Home Assistant gán dữ liệu cho card mỗi khi **bất kỳ thực thể nào** đổi (nhà có hàng nghìn thực thể thì liên tục). Card đã được làm nhẹ (từ 0.8.3):
+- Vẽ lại **tối đa một lần mỗi `refresh_ms`** (mặc định 1000 ms, thấp nhất 250); **không vẽ khi card ngoài màn hình** hoặc tab đang ẩn, hiện lại thì vẽ ngay.
+- CSS nạp một lần; mỗi hộp chỉ đo một lần khi vẽ đường nối.
+- Hoạt ảnh nét đứt tự tắt trên máy ≤ 2 nhân hoặc ≤ 2 GB RAM.
+- Đo trong Chrome với 3000 thực thể, 200 lần cập nhật không liên quan: CPU của card giảm từ khoảng 890 ms xuống gần 0.
+
+Vẫn giật? Thử theo thứ tự:
+```yaml
+refresh_ms: 3000          # vẽ lại tối đa 3 giây một lần
+animate_lines: false      # tắt hoạt ảnh nét đứt
+client_limit: 15          # hiện ít thiết bị hơn
+hide_offline_clients: true
+```
+Trang có nhiều card tuỳ chỉnh khác (mỗi card nạp thêm mã) cũng làm chậm: card này chỉ giảm được phần của nó.
+
+## Khắc phục sự cố
+| Triệu chứng | Nguyên nhân thường gặp | Cách xử lý |
+|---|---|---|
+| Card trống hoặc «Không có dữ liệu» | Sai `prefix`, hoặc `topo_sensor` không tồn tại | Công cụ phát triển → Trạng thái, gõ `cay_thiet_bi`; sửa `prefix`/`topo_sensor` cho khớp |
+| Vẫn thấy giao diện cũ sau khi cập nhật | Bộ nhớ đệm trình duyệt/app | Mục [Cập nhật và kiểm phiên bản](#cập-nhật-và-kiểm-phiên-bản); xem dòng version trong console |
+| Không có nét đứt | Màn hình dưới 820 px; hoặc đang chạy bản cũ hơn 0.8.2 | Cửa sổ rộng hơn; kiểm phiên bản |
+| Một hộp tên «SW2» đỏ, không có tốc độ | Tên `switches`/`port_names` trỏ vào cổng không nối gì | Đổi `port` sang cổng thật (xem tên cổng trong hộp MikroTik) |
+| Máy WiFi không nằm trong hộp ZTE | ZTE chưa đăng nhập được trong `mikrotik_snmp` | Xem `sensor.<tiền_tố>_zte_trang_thai` và README của `mikrotik_snmp` |
+| Tên hộp trong MikroTik bị đổi theo `port_names` | `port_names` đổi cả nhãn cổng | Dùng `switches` để chỉ đặt tên hộp bên phải |
+| Card làm đơ trình duyệt | Máy yếu, hoặc nhiều card nặng | Mục [Hiệu năng](#hiệu-năng-trên-thiết-bị-yếu) |
+| Lỗi `port_names phải là đối tượng` khi lưu | YAML sai | `port_names: { ether2: SW1 }` (đối tượng, không phải danh sách) |
+
+## Cách cũ: tích hợp MikroTik Extended (không khuyến nghị)
+> **Cảnh báo bảo mật.** Hướng dẫn dưới đây tạo tài khoản API có quyền **ghi và khởi động lại router** (`write`, `reboot`, `policy`, `sensitive`). Ai lấy được mật khẩu trong cấu hình Home Assistant điều khiển được router.
+> Nếu chưa phải dùng, hãy dùng `mikrotik_snmp` (chỉ đọc) ở mục «Bắt đầu nhanh». Giữ lại mục này cho ai đã có sẵn tích hợp MikroTik Extended.
+
+### Cài tích hợp MikroTik Extended
 
 Card tự nhận các thực thể của tích hợp **MikroTik Extended**, không cần khai tiền tố hay tên cổng. Chỉ cần thêm card:
 
@@ -59,7 +139,7 @@ Trong tuỳ chọn của tích hợp, bật **Port switches** để card thấy 
 
 **Lưu ý:** tên thực thể HA (ví dụ `ether2`) có thể khác tên RouterOS (ví dụ `ether3`). Card khớp cổng theo cả hai.
 
-## Cài tích hợp ZTE (tuỳ chọn, cho bộ phát ZTE E2633)
+### Cài tích hợp ZTE riêng (cách cũ, cho bộ phát ZTE E2633)
 Cần nếu muốn card hiện máy nào vào WiFi ZTE, băng tần và tín hiệu. Dùng bản fork có hỗ trợ E2633:
 
 1. HACS → Custom repositories → `https://github.com/TriTue2011/zte_tracker` → loại *Integration* → cài → khởi động lại Home Assistant (cần Home Assistant 2025.1 trở lên).
@@ -74,7 +154,7 @@ access_points:
 ```
 Chưa thử các bước 1–2 trên Home Assistant thật của người khác; tích hợp chỉ đọc, sai mật khẩu thì tạm ngừng 30 phút để không khoá tài khoản.
 
-## Cấu hình tối thiểu
+## Cấu hình tối thiểu (cách cũ, tích hợp MikroTik Extended)
 ```yaml
 type: custom:mikrotik-topo-lan-card
 ```
@@ -87,7 +167,8 @@ Card tự nhận WAN (cổng PPPoE/L2TP…), cổng, bridge, đường hầm Wir
 | `prefix` | `mikrotik_router` | Tiền tố thực thể của tích hợp |
 | `wan` | tự nhận | id cổng ra Internet nếu muốn chọn tay |
 | `router_name`, `isp_name` | | Tên hiển thị cho nút router / ISP |
-| `port_names` | | `{ether1: "Bộ phát WiFi"}` — đặt tên cổng |
+| `port_names` | | `{ether1: "Bộ phát WiFi"}` — đặt tên cổng; đổi **cả nhãn trong hộp MikroTik**. Muốn chỉ đặt tên hộp bên phải thì dùng `switches` |
+| `switches` | | `[{ name: SW1, port: ether2 }]` — đặt tên hộp theo cổng, hộp MikroTik giữ tên gốc |
 | `port_speed_sensors` | | `{ether2: {rx: sensor.sw1_nhan_mbit, tx: sensor.sw1_gui_mbit}}` — lấy tốc độ cổng từ cảm biến khác (ví dụ SNMP + Derivative, cập nhật vài giây) thay cho cảm biến của tích hợp MikroTik. Khoá là id hoặc tên cổng (`ether2`, `bridgelan`). Cảm biến chưa có số hoặc đơn vị không phải tốc độ (`Mbit/s`, `kB/s`…) thì card giữ giá trị cũ |
 | `topo_sensor` | | Cảm biến `…_cay_thiet_bi` của `mikrotik_snmp`: card tự dựng hộp và nối thiết bị (xem mục «Tự nối thiết bị vào sơ đồ») |
 | `hide_ports` | | Danh sách id cổng/đường hầm cần ẩn |
@@ -205,7 +286,7 @@ python3 tools/zte_e2633.py clients.json ap.json
 ```
 
 ## Về SNMP
-Card **không cần SNMP**. MikroTik có hỗ trợ SNMP, nhưng nhiều bộ phát WiFi do nhà mạng cấp (ví dụ ZTE E2633) **có thể không** cho người dùng bật SNMP; cách gán theo bảng MAC ở trên không phụ thuộc vào nó.
+Bản thân card **không đọc SNMP**, chỉ đọc thực thể của Home Assistant (tích hợp `mikrotik_snmp` là bên dùng SNMP). MikroTik có hỗ trợ SNMP, nhưng nhiều bộ phát WiFi do nhà mạng cấp (ví dụ ZTE E2633) **có thể không** cho người dùng bật SNMP; cách gán theo bảng MAC ở trên không phụ thuộc vào nó.
 Nếu vẫn bật SNMP trên MikroTik: đổi tên cộng đồng `public` mặc định, giới hạn `addresses` theo IP của Home Assistant, ưu tiên SNMPv3 khi có thể.
 
 > Ghi chú trung thực: phần `command_line` ở trên và card trong Home Assistant thật **chưa được thử trên nhiều hệ khác nhau**; test hiện có dùng dữ liệu mẫu và router giả.
@@ -235,7 +316,7 @@ Thuộc tính là **chuỗi** thì tách bằng `separator` (mặc định xuố
 sources:
   - node: ZTE WiFi
     entity: sensor.zte_router_connected_devices
-    attribute: devices              # "84:CC:A8:A4:4F:95(Tên-172.16.10.34), 8C:CE:..."
+    attribute: devices              # "84:CC:A8:A4:4F:95(Tên-192.168.88.34), 8C:CE:..."
     pattern: '^(?<mac>[0-9A-Fa-f:]{17})\((?<name>.+)-(?<ip>[0-9.]+)\)$'
 ```
 
@@ -244,7 +325,7 @@ sources:
 ```yaml
 hosts:
   - name: Proxmox
-    ip: 172.16.10.100
+    ip: 192.168.88.100
     fields:
       - { label: CPU, entity: sensor.pve_cpu, unit: "%" }
       - { label: RAM, entity: sensor.pve_ram, attribute: used, template: "{value} GB" }
