@@ -348,3 +348,13 @@ test('chỉ hiện thiết bị đang kết nối: máy ngắt và VPN peer ng�
   assert.doesNotMatch(html, /May off/);
   assert.doesNotMatch(html, /laptop/);
 });
+
+test('cổng có data-name là tên RouterOS (ether2 của thực thể ether1), để cấu hình theo tên RouterOS không lẫn với thực thể khác', () => {
+  const st = {
+    'switch.mikrotik_router_port_ether1_port': { state: 'on', attributes: { name: 'ether2', type: 'ether', running: true, comment: '' } },
+    'switch.mikrotik_router_port_ether2_port': { state: 'on', attributes: { name: 'ether3', type: 'ether', running: true, comment: '' } },
+  };
+  const html = renderHtml(discover(st, {}), {}, { states: st, gan: {}, nodes: [] });
+  assert.match(html, /data-name="ether2"/);
+  assert.match(html, /data-name="ether3"/);
+});

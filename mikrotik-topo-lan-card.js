@@ -431,7 +431,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const hienClients = nhomHien.flatMap((g) => g.hien);
 
   const hangCong = (g) => `
-    <div class="hang" data-anchor="cong-${esc(g.key)}" data-ids="${esc([g.id, g.name].map((x) => String(x).toLowerCase().replace(/\s+/g, '_')).join(' '))}" data-luu="${esc(Math.round(g.rx + g.tx))}" title="${esc(g.name)} · ${esc(g.type)} · ${esc(g.comment)}">
+    <div class="hang" data-anchor="cong-${esc(g.key)}" data-name="${esc(String(g.name || '').toLowerCase().replace(/\s+/g, '_'))}" data-ids="${esc([g.id, g.name].map((x) => String(x).toLowerCase().replace(/\s+/g, '_')).join(' '))}" data-luu="${esc(Math.round(g.rx + g.tx))}" title="${esc(g.name)} · ${esc(g.type)} · ${esc(g.comment)}">
       ${chamTrangThai(g.running)}<span class="ten">${esc(g.label)}</span>${dongLuuLuong(g.rx, g.tx, t)}${thanh(g.rx + g.tx)}
     </div>`;
   const hangWg = (h) => `
@@ -734,9 +734,11 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         return { x: (canh === 'phai' ? r.right : r.left) - goc.left, y: r.top + r.height / 2 - goc.top };
       };
       const tim = (a) => cay.querySelector(`[data-anchor="${a}"]`);
+      // Tên RouterOS (ether2) là tên dùng trong cấu hình và bảng MAC: khớp đúng tên trước, rồi mới tới id thực thể.
       const timCong = (ten) => {
         const k = String(ten || '').toLowerCase().replace(/\s+/g, '_').replace(/["\\]/g, '');
-        return k ? cay.querySelector(`[data-ids~="${k}"]`) : null;
+        if (!k) return null;
+        return cay.querySelector(`[data-name="${k}"]`) || cay.querySelector(`[data-ids~="${k}"]`);
       };
       const duong = [];
       const noi = (tu, den) => {
