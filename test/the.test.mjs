@@ -270,3 +270,11 @@ test('tự nhận tiền tố (không cần khai prefix): theo tên cổng switc
   assert.deepEqual(m.ports.map((p) => p.id), ['ether3']);
   assert.equal(detectPrefix({}), null);
 });
+
+test('dòng máy hiện cổng MikroTik nó đang nối (ether3…), không hiện BridgeLAN', () => {
+  const st = { 'device_tracker.may_a': { state: 'home', attributes: { attribution: 'Data provided by Mikrotik', mac: '02:00:00:00:00:21', ip: '192.168.3.21', host_name: 'May A', interface: 'ether3', source: 'arp' } },
+    'device_tracker.may_b': { state: 'home', attributes: { attribution: 'Data provided by Mikrotik', mac: '02:00:00:00:00:22', ip: '192.168.3.22', host_name: 'May B', interface: 'BridgeLAN', source: 'dhcp' } } };
+  const html = renderHtml(discover(st, {}), {}, { states: st, gan: {}, nodes: [] });
+  assert.match(html, /title="MikroTik">ether3</);
+  assert.doesNotMatch(html, /title="MikroTik">BridgeLAN</);
+});

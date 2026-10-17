@@ -424,7 +424,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   };
   const hangMay = (c) => `
     <div class="hang may ${c.online ? '' : 'off'}" title="${esc(c.mac)} · ${esc(c.interface)} · ${esc(c.source)}">
-      ${chamTrangThai(c.online)}<span class="ten">${esc(c.name)}</span>${chipWifi(c)}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.ip)}</span>${nutGan(c)}
+      ${chamTrangThai(c.online)}<span class="ten">${esc(c.name)}</span>${chipWifi(c)}${c.interface && !/bridge/i.test(c.interface) ? `<span class="goi" title="MikroTik">${esc(c.interface)}</span>` : ''}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.ip)}</span>${nutGan(c)}
     </div>`;
   const tieuDeNhom = (g) => {
     const n = g.node;
