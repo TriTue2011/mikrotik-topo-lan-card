@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh, toBytes, fmtBytes, detectPrefix, capNhatCauHinh, themMuc, xoaMuc, suaMuc } from '../mikrotik-topo-lan-card.js';
+import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh, toBytes, fmtBytes, detectPrefix, capNhatCauHinh, themMuc, xoaMuc, suaMuc, phanTichNguon, layNguon, giaTriTruong } from '../mikrotik-topo-lan-card.js';
 
 const mang = JSON.parse(readFileSync(new URL('./fixtures/states.json', import.meta.url), 'utf8'));
 const states = Object.fromEntries(mang.map((s) => [s.entity_id, { state: s.state, attributes: s.attributes }]));
@@ -440,4 +440,45 @@ test('device_sources trong cấu hình: thiết bị vào đúng nút đã chọ
   const theo = Object.fromEntries(nhom.map((g) => [g.name, g.clients.map((c) => c.name)]));
   assert.deepEqual(theo['SW1'], ['Ban 1']);
   assert.deepEqual(theo['SW2'], ['Ban 2']);
+});
+
+test('nguồn tùy chỉnh: danh sách đối tượng (ánh xạ khoá), chuỗi tách bằng mẫu regex có nhóm tên; cấu hình sai thì rỗng không ném lỗi', () => {
+  const st = {
+    'sensor.a': { state: '2', attributes: { ds: [{ m: '02:00:00:00:00:01', ten: 'May A', dbm: -50, rx_rate: 1000, tx_rate: 2000 }, { m: 'hong' }] } },
+    'sensor.b': { state: 'x', attributes: { devices: '84:CC:A8:A4:4F:95(X-SMART-172.16.10.34), 8C:CE:4E:51:AF:FD(ir_quat-172.16.10.247)' } },
+  };
+  const ds = phanTichNguon({ entity: 'sensor.a', attribute: 'ds', map: { mac: 'm', name: 'ten', rssi: 'dbm' } }, st);
+  assert.equal(ds.length, 1, 'phần tử không có MAC hợp lệ bị bỏ');
+  assert.deepEqual([ds[0].mac, ds[0].name, ds[0].rssi, ds[0].rxRate, ds[0].txRate], ['02:00:00:00:00:01', 'May A', -50, 1000, 2000]);
+  const tb = phanTichNguon({ entity: 'sensor.b', attribute: 'devices', pattern: '^(?<mac>[0-9A-F:]{17})\\((?<name>.+)-(?<ip>[0-9.]+)\\)$' }, st);
+  assert.deepEqual(tb.map((d) => [d.mac, d.name, d.ip]), [['84:cc:a8:a4:4f:95', 'X-SMART', '172.16.10.34'], ['8c:ce:4e:51:af:fd', 'ir_quat', '172.16.10.247']]);
+  assert.deepEqual(phanTichNguon({ entity: 'sensor.b', attribute: 'devices', pattern: '([' }, st), [], 'regex hỏng → rỗng');
+  assert.deepEqual(phanTichNguon({ entity: 'sensor.khong-co' }, st), []);
+});
+
+test('nguồn khai tay vào đúng hộp theo tên node; clients_sensor cũ vẫn chạy cùng cơ chế', () => {
+  const st = { 'sensor.b': { state: 'x', attributes: { devices: '02:00:00:00:00:41(May B-172.16.10.41)' } } };
+  const cfg = { access_points: [{ name: 'ZTE WiFi' }], sources: [{ node: 'ZTE WiFi', entity: 'sensor.b', attribute: 'devices', pattern: '^(?<mac>[0-9A-F:]{17})\\((?<name>.+)-(?<ip>[0-9.]+)\\)$' }] };
+  assert.equal(layNguon(cfg, st)[0].devices[0].mac, '02:00:00:00:00:41');
+  const may = [{ mac: '02:00:00:00:00:41', ip: '172.16.10.41', name: 'May B', online: true, interface: 'ether4' }];
+  const { nhom } = phanNhom(may, cfg, {}, st, []);
+  assert.deepEqual(nhom.find((g) => g.node && g.node.name === 'ZTE WiFi').clients.map((c) => c.name), ['May B']);
+});
+
+test('trường tùy chỉnh: lấy từ trạng thái hoặc thuộc tính, trích bằng regex, thêm đơn vị/mẫu; không có giá trị thì ẩn (null)', () => {
+  const st = {
+    'sensor.cpu': { state: '12.5', attributes: { host: 'pve-1', info: 'RAM 14/32 GB' } },
+    'sensor.off': { state: 'unavailable', attributes: {} },
+  };
+  assert.equal(giaTriTruong({ entity: 'sensor.cpu', unit: '%' }, st), '12.5 %');
+  assert.equal(giaTriTruong({ entity: 'sensor.cpu', attribute: 'host' }, st), 'pve-1');
+  assert.equal(giaTriTruong({ entity: 'sensor.cpu', attribute: 'info', extract: 'RAM (\\d+)/' }, st), '14');
+  assert.equal(giaTriTruong({ entity: 'sensor.cpu', template: 'CPU {value}%' }, st), 'CPU 12.5%');
+  assert.equal(giaTriTruong({ entity: 'sensor.off' }, st), null);
+  assert.equal(giaTriTruong({ entity: 'sensor.khong-co' }, st), null);
+  assert.equal(giaTriTruong({ entity: 'sensor.cpu', extract: '([' }, st), null, 'regex hỏng → ẩn');
+  const cfg = { switches: [{ name: 'SW1', port: 'ether2', fields: [{ label: 'CPU', entity: 'sensor.cpu', unit: '%' }, { label: 'Ẩn', entity: 'sensor.off' }] }] };
+  const html = renderHtml(discover(st, cfg), cfg, { states: st, gan: {}, nodes: [] });
+  assert.match(html, /CPU 12\.5 %/);
+  assert.doesNotMatch(html, /Ẩn/, 'trường không có giá trị không chiếm chỗ');
 });

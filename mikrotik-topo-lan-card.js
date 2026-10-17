@@ -266,14 +266,92 @@ export function thietBiTuCamBien(sensorId, states) {
       rxRate: Number.isFinite(Number(c.rx_rate)) ? Number(c.rx_rate) : null, txRate: Number.isFinite(Number(c.tx_rate)) ? Number(c.tx_rate) : null }));
 }
 
-/** {mac: {band, rssi, mode}} của mọi bộ phát khai `clients_sensor` — để hiện băng tần và tín hiệu cạnh thiết bị. */
+const SO_HOP_LE = (v) => (v === '' || v == null ? null : (Number.isFinite(Number(v)) ? Number(v) : null));
+
+/** Một thiết bị từ nguồn bất kỳ → khuôn chuẩn {mac, ip, name, band, rssi, mode, rxRate, txRate}; thiếu MAC hợp lệ thì bỏ. */
+function chuanHoaThietBi(o) {
+  if (!o || typeof o !== 'object') return null;
+  const mac = macChuan(o.mac);
+  if (!/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(mac)) return null;
+  return {
+    mac, ip: o.ip ? String(o.ip).slice(0, 45) : '', name: o.name ? String(o.name).slice(0, 64) : '',
+    band: o.band ? String(o.band).slice(0, 8) : '', rssi: SO_HOP_LE(o.rssi), mode: o.mode ? String(o.mode).slice(0, 16) : '',
+    rxRate: SO_HOP_LE(o.rx), txRate: SO_HOP_LE(o.tx)
+  };
+}
+
+const KHOA_THIET_BI = ['mac', 'ip', 'name', 'band', 'rssi', 'mode', 'rx', 'tx'];
+const KHOA_MAC_DINH = { rx: 'rx_rate', tx: 'tx_rate' };
+
+/**
+ * Danh sách thiết bị lấy từ trạng thái hoặc thuộc tính của một thực thể:
+ *  - thuộc tính là danh sách đối tượng: `map` ánh xạ trường chuẩn → khoá trong đối tượng (mặc định cùng tên; rx→rx_rate, tx→tx_rate);
+ *  - là chuỗi: tách bằng `separator` (mặc định xuống dòng hoặc «, ») rồi áp `pattern` (regex có nhóm tên: mac, ip, name, band, rssi, mode, rx, tx).
+ * Cấu hình sai (regex hỏng, thực thể không có) → rỗng, không ném lỗi.
+ */
+export function phanTichNguon(src, states = {}) {
+  if (!src || typeof src !== 'object' || !src.entity) return [];
+  const st = (states || {})[src.entity];
+  if (!st) return [];
+  const raw = src.attribute ? (st.attributes || {})[src.attribute] : st.state;
+  const map = src.map && typeof src.map === 'object' ? src.map : {};
+  const lay = (it, khoa) => it[map[khoa] || KHOA_MAC_DINH[khoa] || khoa];
+  let muc = [];
+  if (Array.isArray(raw) || (raw && typeof raw === 'object')) {
+    const ds = Array.isArray(raw) ? raw : Object.values(raw);
+    muc = ds.filter((x) => x && typeof x === 'object').map((it) => Object.fromEntries(KHOA_THIET_BI.map((k) => [k, lay(it, k)])));
+  } else if (typeof raw === 'string' && src.pattern && raw.length <= 20000) {
+    let re;
+    try { re = new RegExp(String(src.pattern)); } catch (e) { return []; }
+    const phanCach = src.separator != null ? String(src.separator) : null;
+    const phan = phanCach != null ? raw.split(phanCach) : raw.split(/\n|, /);
+    muc = phan.map((x) => { const m = re.exec(x.trim()); return m && m.groups ? m.groups : null; }).filter(Boolean);
+  }
+  return muc.map(chuanHoaThietBi).filter(Boolean).slice(0, 500);
+}
+
+/**
+ * Mọi nguồn thiết bị: các `sources` khai tay, cộng với `access_points[].clients_sensor` (thuộc tính `clients`, nguồn ZTE).
+ * Mỗi nguồn có `node` (tên hộp mà các thiết bị đó thuộc về).
+ */
+export function layNguon(cfg = {}, states = {}) {
+  const ra = [];
+  for (const a of cfg.access_points || []) if (a && a.clients_sensor) ra.push({ node: a.name || '', entity: a.clients_sensor, attribute: 'clients' });
+  for (const sc of cfg.sources || []) if (sc && typeof sc === 'object') ra.push(sc);
+  return ra.map((sc) => ({ node: String(sc.node || ''), devices: phanTichNguon(sc, states) }));
+}
+
+/** {mac: {band, rssi, mode, rxRate, txRate}} của mọi nguồn — để hiện băng tần, tín hiệu, tốc độ cạnh thiết bị. */
 export function thongTinWifi(cfg = {}, states = {}) {
   const ra = {};
-  for (const a of cfg.access_points || []) {
-    if (!a || !a.clients_sensor) continue;
-    for (const c of thietBiTuCamBien(a.clients_sensor, states)) ra[c.mac] = { band: c.band, rssi: c.rssi, mode: c.mode, rxRate: c.rxRate, txRate: c.txRate };
+  for (const g of layNguon(cfg, states)) {
+    for (const c of g.devices) ra[c.mac] = { band: c.band, rssi: c.rssi, mode: c.mode, rxRate: c.rxRate, txRate: c.txRate };
   }
   return ra;
+}
+
+/**
+ * Giá trị một trường tùy chỉnh {entity, attribute?, extract?, unit?, template?}: lấy trạng thái hoặc thuộc tính,
+ * trích bằng regex `extract` (nhóm 1 nếu có), rồi thêm đơn vị hoặc áp `template` ({value}).
+ * Không có thực thể/giá trị (unknown, unavailable, rỗng) → null: trường đó ẩn, không chiếm chỗ.
+ */
+export function giaTriTruong(f, states = {}) {
+  if (!f || typeof f !== 'object' || !f.entity) return null;
+  const st = (states || {})[f.entity];
+  if (!st) return null;
+  const raw = f.attribute ? (st.attributes || {})[f.attribute] : st.state;
+  if (raw == null || raw === '' || raw === 'unknown' || raw === 'unavailable') return null;
+  let v = typeof raw === 'object' ? JSON.stringify(raw) : String(raw);
+  if (f.extract) {
+    let re;
+    try { re = new RegExp(String(f.extract)); } catch (e) { return null; }
+    const m = re.exec(v);
+    if (!m) return null;
+    v = m[1] != null ? m[1] : m[0];
+  }
+  if (f.template) v = String(f.template).replace('{value}', v);
+  else if (f.unit) v = `${v} ${f.unit}`;
+  return v.slice(0, 80);
 }
 
 export const KIND_SWITCH = 'switch';
@@ -289,7 +367,7 @@ export function dungNut(cfg = {}, userNodes = [], clients = []) {
   (cfg.switches || []).forEach((w, i) => {
     if (!w) return;
     nut.push({ key: `sw-${i}`, kind: KIND_SWITCH, name: w.name || `Switch ${i + 1}`, port: w.port || '', parent: '', macs: (w.macs || []).map(macChuan),
-      ips: [], entity: w.entity || '', tuDong: false, nguon: 'cfg', macSensor: w.mac_sensor || '' });
+      ips: [], entity: w.entity || '', tuDong: false, nguon: 'cfg', macSensor: w.mac_sensor || '', fields: Array.isArray(w.fields) ? w.fields : [] });
   });
   // Switch nối vào một switch khác: khai `switch: <tên switch cha>`. Không cho tạo vòng (A→B→A).
   (cfg.switches || []).forEach((w, i) => {
@@ -306,7 +384,7 @@ export function dungNut(cfg = {}, userNodes = [], clients = []) {
     const cha = a.switch ? (nut.find((n) => n.kind === KIND_SWITCH && n.name === a.switch) || {}).key || '' : '';
     nut.push({ key: `ap-${i}`, kind: KIND_AP, name: a.name || `WiFi ${i + 1}`, port: cha ? '' : (a.port || ''), parent: cha,
       macs: (a.macs || []).map(macChuan), ips: a.ips || [], entity: a.entity || '', tuDong: !!a.auto_private_mac, nguon: 'cfg', macSensor: a.mac_sensor || '',
-      clientsSensor: a.clients_sensor || '' });
+      clientsSensor: a.clients_sensor || '', fields: Array.isArray(a.fields) ? a.fields : [] });
   });
   // Hộp chứa nhiều IP, lồng nhiều tầng. Mỗi hộp: name, ip/mac (gán thiết bị), switch|port (nối vào đâu),
   // children (hộp con khai tay, lồng tiếp được), guest_mac_prefix (máy có tiền tố MAC này tự thành hộp con của hộp).
@@ -320,7 +398,7 @@ export function dungNut(cfg = {}, userNodes = [], clients = []) {
     const box = !!(tien || con.length);
     nut.push({ key: khoa, kind: KIND_SWITCH, name: String(h.name || 'Hộp').slice(0, 60),
       port: cha ? '' : (h.port || ''), parent: cha,
-      macs: hostMac ? [hostMac] : [], ips: h.ip ? [String(h.ip)] : [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', box });
+      macs: hostMac ? [hostMac] : [], ips: h.ip ? [String(h.ip)] : [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', box, fields: Array.isArray(h.fields) ? h.fields : [] });
     con.forEach((c, j) => themHop(c, khoa, `${khoa}.${j}`));
     if (!tien) return;
     for (const c of clients || []) {
@@ -361,7 +439,12 @@ export function phanNhom(clients, cfg = {}, gan = {}, states = {}, userNodes = [
     ...n, clients: [], online: n.entity && states[n.entity] ? states[n.entity].state === 'home' : null
   }));
   // Bộ phát tự báo danh sách máy WiFi của nó: đó là khai báo RÕ (chính xác hơn mọi suy đoán theo cổng).
-  for (const n of nut) if (n.clientsSensor) n.macs = [...n.macs, ...thietBiTuCamBien(n.clientsSensor, states).map((c) => c.mac)];
+  // Thiết bị do nguồn khai là khai báo RÕ (chính xác hơn suy đoán theo cổng): vào đúng hộp có tên trùng `node` của nguồn.
+  const cacNguon = layNguon(cfg, states);
+  for (const n of nut) {
+    const ds = cacNguon.filter((g) => g.node && g.node === n.name).flatMap((g) => g.devices.map((d) => d.mac));
+    if (ds.length) n.macs = [...n.macs, ...ds];
+  }
   // Chính router của bộ phát (ví dụ ZTE 172.16.10.24) là thiết bị của nó, không phải máy LAN: lấy IP từ cảm biến chính
   // sensor.<tên>_connected_devices → sensor.<tên> (thuộc tính host).
   for (const n of nut) {
@@ -510,7 +593,8 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const tieuDe = cfg.title || t.title;
   const tenRouter = cfg.router_name || t.router;
   const { core, wan, ports, bridges, ppp, tunnels, clients } = model;
-  const coDuLieu = !!(wan || ports.length || bridges.length || tunnels.length || clients.length || core.cpu != null);
+  const coHop = (cfg.switches || []).length + (cfg.access_points || []).length + (cfg.hosts || []).length > 0;
+  const coDuLieu = !!(wan || ports.length || bridges.length || tunnels.length || clients.length || core.cpu != null || coHop);
   if (!coDuLieu) return `<ha-card><div class="vo">${esc(t.none)}</div></ha-card>`;
 
   const tong = wan ? { rx: wan.rx, tx: wan.tx } : ports.reduce((s, p) => ({ rx: s.rx + p.rx, tx: s.tx + p.tx }), { rx: 0, tx: 0 });
@@ -520,7 +604,8 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   if (cfg.hide_offline_clients) ds = ds.filter((c) => c.online);
   if (loc) ds = ds.filter((c) => `${c.name} ${c.ip} ${c.mac}`.toLowerCase().includes(loc));
   const gioiHan = Math.max(5, Number(ui.limit || cfg.client_limit || 30));
-  const { nut, nhom } = phanNhom(ds, cfg, ui.gan || {}, ui.states || {}, ui.nodes || []);
+  // Gán tay cũ đã lưu trong trình duyệt không còn dùng; nguồn của thiết bị khai bằng device_sources trong cấu hình.
+  const { nut, nhom } = phanNhom(ds, cfg, {}, ui.states || {}, ui.nodes || []);
   let conLai = cfg.show_clients === false ? 0 : gioiHan;
   const nhomHien = nhom.filter((g) => g.clients.length || g.node).map((g) => {
     const hien = g.clients.slice(0, Math.max(0, conLai)); conLai -= hien.length; return { ...g, hien };
@@ -567,9 +652,13 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     const toc = w.rxRate != null || w.txRate != null ? `${dongLuuLuong(w.rxRate || 0, w.txRate || 0, t)}${thanh((w.rxRate || 0) + (w.txRate || 0))}` : '';
     return `${nhan ? `<span class="goi" title="${esc(w.mode)}">${esc(nhan)}</span>` : ''}${toc}`;
   };
+  const chipTruong = (ds) => (Array.isArray(ds) ? ds : []).map((f) => {
+    const v = giaTriTruong(f, ui.states || {});
+    return v == null ? '' : `<span class="goi">${esc(f.label ? `${f.label} ` : '')}${esc(v)}</span>`;
+  }).join('');
   const hangMay = (c) => `
     <div class="hang may ${c.online ? '' : 'off'}" title="${esc(c.mac)} · ${esc(c.interface)} · ${esc(c.source)}">
-      ${chamTrangThai(c.online)}<span class="ten">${esc((cfg.device_names || {})[macChuan(c.mac)] || c.name)}</span>${chipWifi(c)}${c.interface && !/bridge/i.test(c.interface) ? `<span class="goi" title="MikroTik">${esc(c.interface)}</span>` : ''}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.mac)}</span><span class="lu">${esc(c.ip)}</span>
+      ${chamTrangThai(c.online)}<span class="ten">${esc((cfg.device_names || {})[macChuan(c.mac)] || c.name)}</span>${chipWifi(c)}${chipTruong((cfg.device_fields || {})[macChuan(c.mac)])}${c.interface && !/bridge/i.test(c.interface) ? `<span class="goi" title="MikroTik">${esc(c.interface)}</span>` : ''}${macRiengTu(c.mac) ? `<span class="goi" title="${esc(t.wifiHint)}">◌</span>` : ''}<span class="lu">${esc(c.mac)}</span><span class="lu">${esc(c.ip)}</span>
     </div>`;
   const tieuDeNhom = (g) => {
     const n = g.node;
@@ -608,10 +697,12 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
       return hopMay(c, `n-${esc(n.key)}`);
     }
     const sl = g ? g.clients.length : 0;
+    const truong = chipTruong(n.fields);
     let rows = n.box && g && hienMay ? g.hien.map(hangMay).join('') : '';
     if (n.box && !rows && (n.ips.length || n.macs.length)) rows = `<div class="hop-dong phu">${esc([n.ips[0], n.macs[0]].filter(Boolean).join(' · '))}</div>`;
     return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}${n.box ? ' hop-chua' : ''}" data-anchor="n-${esc(n.key)}" data-luu="0">
       <div class="tieu-nhom nhom-may">${n.kind === KIND_AP ? chamTrangThai(n.online) : ''}${n.kind === KIND_AP ? '📶 ' : '⇄ '}${esc(n.name)} (${esc(sl)})${n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : ''}</div>
+      ${truong ? `<div class="hop-dong">${truong}</div>` : ''}
       ${rows}
       ${inner}
     </div>`;

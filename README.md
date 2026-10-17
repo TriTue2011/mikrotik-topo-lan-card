@@ -108,6 +108,48 @@ Nếu vẫn bật SNMP trên MikroTik: đổi tên cộng đồng `public` mặc
 ## Phát triển
 `npm test` chạy test JavaScript (Node ≥ 20, không cần cài gói) và test Python của công cụ. `tools/xem-thu.html` dựng thử card với dữ liệu mẫu đã ẩn danh (`python3 -m http.server`, mở `/tools/xem-thu.html`).
 
+## Cấu hình nâng cao (đa dụng)
+
+Card không gắn cứng với một nhãn hiệu: mọi thông số lấy từ **trạng thái** hoặc **thuộc tính** của thực thể bạn chỉ định. Thông số nào không khai báo, hoặc thực thể không có giá trị, thì **ẩn hẳn**, không chiếm chỗ trong card hay hộp.
+
+**Hộp và nơi nối** — `switches`, `access_points`, `hosts` đều có `name`; nối vào cổng MikroTik bằng `port`, hoặc vào hộp khác bằng `switch: <tên>`. `hosts` lồng được nhiều tầng bằng `children`; `guest_mac_prefix` tự thêm hộp con cho máy có tiền tố MAC đó.
+
+**Nguồn thiết bị tùy chỉnh** (`sources`) — lấy danh sách thiết bị từ thuộc tính của bất kỳ thực thể nào:
+
+```yaml
+sources:
+  - node: ZTE WiFi                  # tên hộp mà các thiết bị này thuộc về
+    entity: sensor.zte_router_connected_devices
+    attribute: clients              # thuộc tính (bỏ trống thì lấy trạng thái)
+    map: { mac: mac, name: name, ip: ip, rssi: rssi, band: band, mode: mode, rx: rx_rate, tx: tx_rate }   # tuỳ chọn
+```
+
+Thuộc tính là **chuỗi** thì tách bằng `separator` (mặc định xuống dòng hoặc `, `) rồi áp `pattern` (regex có nhóm tên `mac`, `ip`, `name`, `band`, `rssi`, `mode`, `rx`, `tx`):
+
+```yaml
+sources:
+  - node: ZTE WiFi
+    entity: sensor.zte_router_connected_devices
+    attribute: devices              # "84:CC:A8:A4:4F:95(Tên-172.16.10.34), 8C:CE:..."
+    pattern: '^(?<mac>[0-9A-Fa-f:]{17})\((?<name>.+)-(?<ip>[0-9.]+)\)$'
+```
+
+**Trường tùy chỉnh** (`fields`) — gắn vào hộp (`switches`, `access_points`, `hosts`) hoặc vào thiết bị (`device_fields`, khoá là MAC):
+
+```yaml
+hosts:
+  - name: Proxmox
+    ip: 172.16.10.100
+    fields:
+      - { label: CPU, entity: sensor.pve_cpu, unit: "%" }
+      - { label: RAM, entity: sensor.pve_ram, attribute: used, template: "{value} GB" }
+      - { label: Phiên bản, entity: sensor.pve_info, attribute: version, extract: "(\\d+\\.\\d+)" }   # lấy nhóm 1 của regex
+```
+
+Mỗi trường: `entity`, `attribute` (tuỳ chọn), `extract` (regex, lấy nhóm 1), `unit` hoặc `template` (`{value}`), `label`.
+
+**Tên và nguồn thiết bị** — `port_names` (tên cổng, bridge), `device_names` (tên thiết bị theo MAC), `device_sources` (thiết bị → tên hộp; chọn trong Sửa thẻ → Thiết bị), `default_source` (nguồn cho thiết bị có dây chưa chọn).
+
 ## Giấy phép
 MIT.
 
