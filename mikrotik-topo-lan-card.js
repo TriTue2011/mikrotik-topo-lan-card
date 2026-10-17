@@ -90,8 +90,6 @@ export function discover(states, cfg = {}) {
   const tienTo = cfg.prefix || detectPrefix(states) || 'mikrotik_router';
   const P = reEsc(tienTo);
   const reLuuLuong = new RegExp(`^sensor\\.${P}_(port|bridge|ppp)_(.+)_(rx|tx)$`);
-  const reTong = new RegExp(`^sensor\\.${P}_(port|bridge|ppp)_(.+)_(rx|tx)_total$`);
-  const reIpCong = new RegExp(`^sensor\\.${P}_(port|bridge|ppp)_(.+)_ip_address$`);
   const reWg = new RegExp(`^sensor\\.${P}_wireguard_(.+)_(rx|tx)$`);
   const reWgBatTay = new RegExp(`^sensor\\.${P}_wireguard_(.+)_last_handshake$`);
   const reKetNoi = new RegExp(`^binary_sensor\\.${P}_(port|bridge|ppp)_(.+)_connection$`);
@@ -102,8 +100,7 @@ export function discover(states, cfg = {}) {
   const duongHam = new Map();
   const lay = (loai, id) => {
     const k = `${loai}:${id}`;
-    if (!giaoDien.has(k)) giaoDien.set(k, { key: k, id, kind: loai, name: id, comment: '', running: null, type: '', rx: 0, tx: 0,
-      rxTong: 0, txTong: 0, ip: '', status: '', mtu: null, linkDowns: null, lastUp: '' });
+    if (!giaoDien.has(k)) giaoDien.set(k, { key: k, id, kind: loai, name: id, comment: '', running: null, type: '', rx: 0, tx: 0 });
     return giaoDien.get(k);
   };
   const ham = (id) => {
@@ -125,13 +122,6 @@ export function discover(states, cfg = {}) {
       const gd = lay(m[1], m[2]);
       gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
       gd.running = typeof a.running === 'boolean' ? a.running : on(s.state);
-      gd.status = a.status || gd.status; gd.mtu = a.actual_mtu != null ? a.actual_mtu : gd.mtu;
-      gd.linkDowns = a.link_downs != null ? a.link_downs : gd.linkDowns; gd.lastUp = a.last_link_up_time || gd.lastUp;
-    } else if ((m = reTong.exec(eid))) {
-      const gd = lay(m[1], m[2]);
-      gd[m[3] + 'Tong'] = toBytes(s.state, a.unit_of_measurement);
-    } else if ((m = reIpCong.exec(eid))) {
-      lay(m[1], m[2]).ip = String(s.state || '');
     } else if ((m = reKetNoi.exec(eid))) {
       lay(m[1], m[2]).running = on(s.state);
     } else if ((m = reWg.exec(eid))) {
@@ -160,8 +150,7 @@ export function discover(states, cfg = {}) {
   const core = {
     cpu: so(loi('cpu_load')), ram: so(loi('memory_usage')), hdd: so(loi('hdd_usage')),
     uptime: loi('uptime') ? loi('uptime').state : '', wired: so(loi('wired_clients')), wireless: so(loi('wireless_clients')),
-    version: capNhat && capNhat.attributes ? (capNhat.attributes.installed_version || '') : '',
-    latest: capNhat && capNhat.attributes ? (capNhat.attributes.latest_version || '') : ''
+    version: capNhat && capNhat.attributes ? (capNhat.attributes.installed_version || '') : ''
   };
   const tatCa = [...giaoDien.values()];
   const wan = cfg.wan
@@ -383,8 +372,6 @@ const CHU = {
   vi: {
     title: 'Mạng LAN MikroTik', internet: 'Internet', router: 'MikroTik', ports: 'Cổng', tunnels: 'Đường hầm VPN', clients: 'Thiết bị',
     wgTitle: 'VPN WireGuard', batTay: 'bắt tay', truoc: 'trước', tong: 'tổng', vpnRa: 'đi ra Internet', vpnVao: 'truy cập từ xa',
-    tabSoDo: 'Sơ đồ', tabRouter: 'MikroTik', sectRouter: 'Router', sectWan: 'WAN', sectBridge: 'Bridge LAN', sectPorts: 'Cổng',
-    sectVpn: 'VPN WireGuard', loai: 'loại', ngat: 'ngắt', lenCuoi: 'lên lần cuối', updateNew: 'có bản mới', wired: 'Máy có dây', wireless: 'Máy WiFi', noWan: 'Chưa có WAN',
     search: 'Tìm tên, IP, MAC…', more: 'Xem thêm', none: 'Không có dữ liệu — kiểm tra tiền tố (prefix) và tích hợp MikroTik.',
     up: 'lên', down: 'xuống', online: 'đang kết nối', cpu: 'CPU', ram: 'RAM', uptime: 'Hoạt động', noClients: 'Chưa có thiết bị',
     connected: 'đã kết nối', disconnected: 'ngắt', assign: 'Gán vào', unassign: 'Bỏ gán', wifiHint: 'MAC riêng tư — thường là máy dùng WiFi',
@@ -395,8 +382,6 @@ const CHU = {
   en: {
     title: 'MikroTik LAN', internet: 'Internet', router: 'MikroTik', ports: 'Ports', tunnels: 'VPN tunnels', clients: 'Devices',
     wgTitle: 'VPN WireGuard', batTay: 'handshake', truoc: 'ago', tong: 'total', vpnRa: 'exit via Internet', vpnVao: 'remote access',
-    tabSoDo: 'Diagram', tabRouter: 'MikroTik', sectRouter: 'Router', sectWan: 'WAN', sectBridge: 'Bridge LAN', sectPorts: 'Ports',
-    sectVpn: 'VPN WireGuard', loai: 'type', ngat: 'down', lenCuoi: 'last up', updateNew: 'new version', wired: 'Wired devices', wireless: 'WiFi devices', noWan: 'No WAN',
     search: 'Search name, IP, MAC…', more: 'Show more', none: 'No data — check the prefix and the MikroTik integration.',
     up: 'up', down: 'down', online: 'online', cpu: 'CPU', ram: 'RAM', uptime: 'Uptime', noClients: 'No devices',
     connected: 'connected', disconnected: 'down', assign: 'Assign to', unassign: 'Unassign', wifiHint: 'Private MAC — usually a WiFi device',
@@ -423,56 +408,12 @@ export function noiCam(model, nut) {
   ];
 }
 
-/** Thanh chuyển tab của card: Sơ đồ / MikroTik. */
-function tabBar(t, ui) {
-  const dang = ui && ui.tab === 'mikrotik' ? 'mikrotik' : 'so-do';
-  return `<div class="tabs-the" role="tablist">
-    <button class="tab-the ${dang === 'so-do' ? 'on' : ''}" data-tab="so-do" role="tab" aria-selected="${dang === 'so-do'}">${esc(t.tabSoDo)}</button>
-    <button class="tab-the ${dang === 'mikrotik' ? 'on' : ''}" data-tab="mikrotik" role="tab" aria-selected="${dang === 'mikrotik'}">${esc(t.tabRouter)}</button>
-  </div>`;
-}
-
-/** Tab MikroTik: gom toàn bộ thông tin hộp router (CPU/RAM, WAN, Bridge LAN, từng cổng, VPN) vào một chỗ. */
-function renderRouterCard(model, cfg, ui, now) {
-  const t = CHU[cfg.language === 'en' ? 'en' : 'vi'];
-  const { core, wan, ports, bridges, ppp, vpn } = model;
-  const chiTiet = (g) => [g.type && `${t.loai} ${g.type}`, g.status, g.mtu != null ? `MTU ${g.mtu}` : '',
-    g.linkDowns != null ? `${t.ngat} ${g.linkDowns}` : '', g.lastUp ? `${t.lenCuoi} ${g.lastUp}` : '', g.comment].filter(Boolean).join(' · ');
-  const dong = (g) => `<div class="hang ${g.running ? '' : 'off'}" title="${esc(g.name)}">${chamTrangThai(g.running)}<span class="ten">${esc(g.label || g.name)}</span>${dongLuuLuong(g.rx, g.tx, t)}<span class="lu">${esc(t.tong)} ↓ ${esc(fmtBytes(g.rxTong))} ↑ ${esc(fmtBytes(g.txTong))}</span>${g.ip ? `<span class="lu">${esc(g.ip)}</span>` : ''}</div>${chiTiet(g) ? `<div class="phu chi-tiet">${esc(chiTiet(g))}</div>` : ''}`;
-  const chips = [
-    core.cpu != null ? `CPU ${core.cpu}%` : '', core.ram != null ? `RAM ${core.ram}%` : '', core.hdd != null ? `HDD ${core.hdd}%` : '',
-    core.uptime ? `${t.uptime} ${fmtUptime(core.uptime, now)}` : '',
-    core.version ? `RouterOS ${core.version}${core.latest && core.latest !== core.version ? ` (${t.updateNew} ${core.latest})` : ''}` : '',
-    core.wired != null ? `${t.wired} ${core.wired}` : '', core.wireless != null ? `${t.wireless} ${core.wireless}` : ''
-  ].filter(Boolean);
-  const peer = (h) => `<div class="hang ham ${h.connected ? '' : 'off'}">${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span>${h.batTay != null ? `<span class="lu">${esc(t.batTay)} ${esc(Math.round(h.batTay))} s ${esc(t.truoc)}</span>` : ''}<span class="lu">↓ ${esc(fmtBytes(h.rxTong))} ↑ ${esc(fmtBytes(h.txTong))}</span></div>`;
-  return `<ha-card>
-    <div class="dau"><div class="td">${esc(cfg.title || t.title)}</div></div>
-    ${tabBar(t, ui)}
-    <div class="the-may">
-      <div class="tieu-nhom">${esc(t.sectRouter)}</div>
-      <div class="hang-chip">${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div>
-      <div class="tieu-nhom">${esc(t.sectWan)}</div>
-      ${wan ? dong(wan) : `<div class="phu">${esc(t.noWan)}</div>`}
-      <div class="tieu-nhom">${esc(t.sectBridge)}</div>
-      ${bridges.length ? bridges.map(dong).join('') : `<div class="phu">${esc(t.none)}</div>`}
-      <div class="tieu-nhom">${esc(t.sectPorts)}</div>
-      ${ports.length ? ports.map(dong).join('') : `<div class="phu">${esc(t.none)}</div>`}
-      ${ppp.length ? `<div class="tieu-nhom">PPP</div>${ppp.map(dong).join('')}` : ''}
-      <div class="tieu-nhom">${esc(t.sectVpn)}</div>
-      ${vpn.ifaces.map(dong).join('')}
-      ${vpn.peers.map(peer).join('')}
-    </div>
-  </ha-card>`;
-}
-
 export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const t = CHU[cfg.language === 'en' ? 'en' : 'vi'];
   const tieuDe = cfg.title || t.title;
   const tenRouter = cfg.router_name || t.router;
   const { core, wan, ports, bridges, ppp, tunnels, clients } = model;
   const coDuLieu = !!(wan || ports.length || bridges.length || tunnels.length || clients.length || core.cpu != null);
-  if (ui.tab === 'mikrotik') return renderRouterCard(model, cfg, ui, now);
   if (!coDuLieu) return `<ha-card><div class="vo">${esc(t.none)}</div></ha-card>`;
 
   const tong = wan ? { rx: wan.rx, tx: wan.tx } : ports.reduce((s, p) => ({ rx: s.rx + p.rx, tx: s.tx + p.tx }), { rx: 0, tx: 0 });
@@ -570,7 +511,6 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
       <div class="chip">${esc(online)}/${esc(clients.length)} ${esc(t.online)}</div>
       ${cfg.show_clients === false ? '' : `<button class="chip nut-sua" data-act="sua" aria-pressed="${ui.edit ? 'true' : 'false'}" title="${esc(t.edit)}" aria-label="${esc(t.edit)}">✎</button>`}</div>
     ${bang}
-    ${tabBar(t, ui)}
     <div class="cay">
       <svg class="duong" aria-hidden="true"></svg>
       <div class="cot cot-isp">
@@ -644,11 +584,6 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .sua label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--secondary-text-color)}
 .sua label.ngang{flex-direction:row;align-items:center;gap:8px}
 .hang-nut{display:flex;gap:8px}
-.tabs-the{display:flex;gap:6px;padding:4px 12px 8px}
-.tab-the{padding:6px 12px;border-radius:14px;border:1px solid var(--divider-color,#555);background:transparent;color:var(--secondary-text-color);cursor:pointer;font:inherit}
-.tab-the.on{color:var(--primary-color,#03a9f4);border-color:var(--primary-color,#03a9f4)}
-.hang-chip{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
-.chi-tiet{margin:-2px 0 6px 26px;font-size:.85rem}
 .vpn-khoi{margin:4px 0 8px 10px;padding-left:8px;border-left:2px solid var(--divider-color,#555)}
 .vpn-khoi.ra{border-left-style:dashed}
 .vpn-cong .ten{font-weight:600}
@@ -772,7 +707,6 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
           this._luu(); this._ve(true);
         });
       }
-      r.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._ui.tab = b.dataset.tab; this._ve(true); }));
       r.querySelectorAll('[data-act="xoa-nut"]').forEach((b) => b.addEventListener('click', () => {
         const key = b.dataset.key; const id = String(key).replace(/^u-/, '');
         // nút cha bị xoá → nút con mất cha (không treo); gán tay vào nút đã xoá bị bỏ
