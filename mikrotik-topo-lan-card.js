@@ -434,81 +434,56 @@ export function noiCam(model, nut) {
   ];
 }
 
-/** Thanh chuyển tab của card: Sơ đồ / MikroTik. */
-function tabBar(t, ui) {
-  const dang = ui && ui.tab === 'mikrotik' ? 'mikrotik' : 'so-do';
-  return `<div class="tabs-the" role="tablist">
-    <button class="tab-the ${dang === 'so-do' ? 'on' : ''}" data-tab="so-do" role="tab" aria-selected="${dang === 'so-do'}">${esc(t.tabSoDo)}</button>
-    <button class="tab-the ${dang === 'mikrotik' ? 'on' : ''}" data-tab="mikrotik" role="tab" aria-selected="${dang === 'mikrotik'}">${esc(t.tabRouter)}</button>
-  </div>`;
-}
-
-/** Tab MikroTik (có các tab con: Tổng quan, WAN, Bridge LAN). Thông tin lấy tự động từ tích hợp. */
-function renderRouterCard(model, cfg, ui, now) {
-  const t = CHU[cfg.language === 'en' ? 'en' : 'vi'];
-  const { core, wan, wanCong, ports, bridges, ppp, vpn } = model;
-  const sub = ['tong-quan', 'wan', 'bridge'].includes(ui.sub) ? ui.sub : 'tong-quan';
-  const thanhCon = `<div class="tab-con-hang">${[['tong-quan', t.subTong], ['wan', t.subWan], ['bridge', t.subBridge]]
-    .map(([k, n]) => `<button class="tab-con ${sub === k ? 'on' : ''}" data-sub="${k}" aria-selected="${sub === k}">${esc(n)}</button>`).join('')}</div>`;
+/** Hộp MikroTik trong sơ đồ: tab lồng bên trong gồm WAN và Bridge LAN. Thông tin lấy tự động từ tích hợp. */
+function renderRouterBox(model, cfg, ui, t) {
+  const { wan, wanCong, ports, bridges } = model;
   const kv = (nhan, gia) => (gia === '' || gia == null ? '' : `<div class="kv"><span>${esc(nhan)}</span><b>${esc(gia)}</b></div>`);
   const trangThai = (g) => (g.running === true ? t.dangChay : g.running === false ? t.ngung : '—');
-  const dong = (g) => `<div class="hang ${g.running ? '' : 'off'}" title="${esc(g.name)}">${chamTrangThai(g.running)}<span class="ten">${esc(g.label || g.name)}</span>${dongLuuLuong(g.rx, g.tx, t)}<span class="lu">${esc(t.tong)} ↓ ${esc(fmtBytes(g.rxTong))} ↑ ${esc(fmtBytes(g.txTong))}</span>${g.ip ? `<span class="lu">${esc(g.ip)}</span>` : ''}</div>`;
-  const chiTietCong = (g) => `<div class="cong-chi-tiet">${kv(t.dangChay === 'running' ? 'Status' : 'Trạng thái', trangThai(g))}${kv(t.kieu, g.type)}${kv(t.mtuLbl, g.mtu)}${kv(t.lastUpLbl, g.lastUp)}${kv(t.linkDowns, g.linkDowns)}${kv(t.nowRate, `↓ ${fmtRate(g.rx)} ↑ ${fmtRate(g.tx)}`)}${kv(t.totalTx, `↓ ${fmtBytes(g.rxTong)} ↑ ${fmtBytes(g.txTong)}`)}${kv(t.ipAddr, g.ip)}${kv(t.chiTietCong, g.comment)}</div>`;
-
-  let noiDung = '';
-  if (sub === 'tong-quan') {
-    const chips = [
-      core.cpu != null ? `CPU ${core.cpu}%` : '', core.ram != null ? `RAM ${core.ram}%` : '', core.hdd != null ? `HDD ${core.hdd}%` : '',
-      core.uptime ? `${t.uptime} ${fmtUptime(core.uptime, now)}` : '',
-      core.version ? `RouterOS ${core.version}${core.latest && core.latest !== core.version ? ` (${t.updateNew} ${core.latest})` : ''}` : '',
-      core.wired != null ? `${t.wired} ${core.wired}` : '', core.wireless != null ? `${t.wireless} ${core.wireless}` : ''
-    ].filter(Boolean);
-    noiDung = `<div class="hang-chip">${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div>
-      <div class="tieu-nhom">${esc(t.ports)}</div>${ports.map(dong).join('') || `<div class="phu">${esc(t.none)}</div>`}
-      ${ppp.length ? `<div class="tieu-nhom">PPP</div>${ppp.map(dong).join('')}` : ''}
-      <div class="tieu-nhom">${esc(t.sectVpn)}</div>${vpn.ifaces.map(dong).join('')}${vpn.peers.map((h) => `<div class="hang ham ${h.connected ? '' : 'off'}">${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span>${h.batTay != null ? `<span class="lu">${esc(t.batTay)} ${esc(Math.round(h.batTay))} s ${esc(t.truoc)}</span>` : ''}<span class="lu">↓ ${esc(fmtBytes(h.rxTong))} ↑ ${esc(fmtBytes(h.txTong))}</span></div>`).join('')}`;
-  } else if (sub === 'wan') {
-    if (!wan) {
-      noiDung = `<div class="phu">${esc(t.noWan)}</div>`;
-    } else {
-      noiDung = `<div class="wan-khoi">
-        <div class="wan-tieu">${chamTrangThai(wan.running)}<b>${esc(cfg.isp_name || wan.comment || t.internet)}</b><span class="phu">${esc(wan.name)}</span></div>
-        <div class="wan-luoi">
-          ${kv(t.isp, cfg.isp_name || wan.comment)}
-          ${kv(t.cong, wan.name)}
-          ${kv(t.kieu, wan.type)}
-          ${kv(t.ipAddr, wan.ip)}
-          ${kv(t.mtuLbl, wan.mtu)}
-          ${kv(t.lastUpLbl, wan.lastUp)}
-          ${kv(t.linkDowns, wan.linkDowns)}
-          ${kv(t.nowRate, `↓ ${fmtRate(wan.rx)} ↑ ${fmtRate(wan.tx)}`)}
-          ${kv(t.totalTx, `↓ ${fmtBytes(wan.rxTong)} ↑ ${fmtBytes(wan.txTong)}`)}
-        </div>
-        ${wanCong ? `<div class="tieu-nhom">${esc(t.cong)} ${esc(wanCong.name)}</div>${chiTietCong(wanCong)}` : ''}
-      </div>`;
-    }
+  const rtab = ui.rtab === 'bridge' ? 'bridge' : 'wan';
+  const thanhTab = `<div class="rtab-hang">${[['wan', t.subWan], ['bridge', t.subBridge]]
+    .map(([k, n]) => `<button class="rtab ${rtab === k ? 'on' : ''}" data-rtab="${k}" aria-selected="${rtab === k}">${esc(n)}</button>`).join('')}</div>`;
+  let noiDung;
+  if (rtab === 'wan') {
+    noiDung = !wan ? `<div class="phu">${esc(t.noWan)}</div>` : `<div class="wan-khoi">
+      <div class="wan-tieu">${chamTrangThai(wan.running)}<b>${esc(cfg.isp_name || wan.comment || t.internet)}</b><span class="phu">${esc(wan.name)}</span></div>
+      <div class="wan-luoi">
+        ${kv(t.isp, cfg.isp_name || wan.comment)}
+        ${kv(t.kieu, wan.type)}
+        ${kv(t.ipAddr, wan.ip)}
+        ${kv(t.mtuLbl, wan.mtu)}
+        ${kv(t.lastUpLbl, wan.lastUp)}
+        ${kv(t.linkDowns, wan.linkDowns)}
+        ${kv(t.nowRate, `↓ ${fmtRate(wan.rx)} ↑ ${fmtRate(wan.tx)}`)}
+        ${kv(t.totalTx, `↓ ${fmtBytes(wan.rxTong)} ↑ ${fmtBytes(wan.txTong)}`)}
+      </div>
+      ${wanCong ? `<div class="tieu-nhom">${esc(t.cong)} ${esc(wanCong.name)}</div><div class="wan-luoi">
+        ${kv(t.trangThai || 'Trạng thái', trangThai(wanCong))}
+        ${kv(t.mtuLbl, wanCong.mtu)}
+        ${kv(t.lastUpLbl, wanCong.lastUp)}
+        ${kv(t.linkDowns, wanCong.linkDowns)}
+        ${kv(t.ipAddr, wanCong.ip)}
+        ${kv(t.totalTx, `↓ ${fmtBytes(wanCong.rxTong)} ↑ ${fmtBytes(wanCong.txTong)}`)}
+      </div>` : ''}
+    </div>`;
   } else {
-    // Bridge LAN: chọn các cổng ether nằm trong bridge (mặc định: mọi cổng nội bộ, trừ WAN).
+    // Bridge LAN: chọn các cổng ether trong bridge (mặc định: mọi cổng nội bộ, trừ WAN); lựa chọn lưu theo người dùng HA.
     const macDinh = ports.map((g) => g.name);
     const thanhVien = Array.isArray(ui.bridge) ? ui.bridge : (Array.isArray(cfg.bridge_ports) ? cfg.bridge_ports : macDinh);
     const cong = ports.filter((g) => thanhVien.includes(g.name));
     const br = bridges[0];
     noiDung = `<div class="bridge-khoi" data-members="${esc(thanhVien.join(','))}">
       <div class="wan-tieu">${chamTrangThai(br ? br.running : null)}<b>${esc(br ? br.name : 'Bridge')}</b><span class="phu">${esc(br && br.comment ? br.comment : '')}</span></div>
-      <p class="phu">${esc(t.bridgeNote)}</p>
-      <div class="tieu-nhom">${esc(t.chonCong)}</div>
-      <div class="cong-chon">${ports.map((g) => `<label class="chon-cong"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}> ${esc(g.name)} ${g.label && g.label !== g.name ? `<span class="phu">${esc(g.label)}</span>` : ''}</label>`).join('') || `<span class="phu">${esc(t.chuaCo)}</span>`}</div>
-      <div class="tieu-nhom">${esc(t.ports)} (${esc(cong.length)})</div>
-      ${cong.map((g) => `<div class="cong-the">${dong(g)}${chiTietCong(g)}</div>`).join('') || `<div class="phu">${esc(t.none)}</div>`}
+      <div class="cong-chon">${ports.map((g) => `<label class="chon-cong"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}> ${esc(g.name)}</label>`).join('') || `<span class="phu">${esc(t.chuaCo)}</span>`}</div>
+      ${cong.map((g) => `<div class="cong-the"><div class="hang ${g.running ? '' : 'off'}">${chamTrangThai(g.running)}<span class="ten">${esc(g.name)}</span>${dongLuuLuong(g.rx, g.tx, t)}</div><div class="wan-luoi">
+        ${kv(t.trangThai || 'Trạng thái', trangThai(g))}
+        ${kv(t.mtuLbl, g.mtu)}
+        ${kv(t.linkDowns, g.linkDowns)}
+        ${kv(t.lastUpLbl, g.lastUp)}
+        ${kv(t.totalTx, `↓ ${fmtBytes(g.rxTong)} ↑ ${fmtBytes(g.txTong)}`)}
+      </div></div>`).join('') || `<div class="phu">${esc(t.none)}</div>`}
     </div>`;
   }
-
-  return `<ha-card class="may-the">
-    <div class="dau"><div class="td">${esc(cfg.title || t.title)}</div></div>
-    ${tabBar(t, ui)}
-    ${thanhCon}
-    <div class="the-may">${noiDung}</div>
-  </ha-card>`;
+  return `${thanhTab}<div class="rtab-noi">${noiDung}</div>`;
 }
 
 export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
@@ -517,7 +492,6 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const tenRouter = cfg.router_name || t.router;
   const { core, wan, ports, bridges, ppp, tunnels, clients } = model;
   const coDuLieu = !!(wan || ports.length || bridges.length || tunnels.length || clients.length || core.cpu != null);
-  if (ui.tab === 'mikrotik') return renderRouterCard(model, cfg, ui, now);
   if (!coDuLieu) return `<ha-card><div class="vo">${esc(t.none)}</div></ha-card>`;
 
   const tong = wan ? { rx: wan.rx, tx: wan.tx } : ports.reduce((s, p) => ({ rx: s.rx + p.rx, tx: s.tx + p.tx }), { rx: 0, tx: 0 });
@@ -639,7 +613,6 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
       <div class="chip">${esc(online)}/${esc(clients.length)} ${esc(t.online)}</div>
       ${cfg.show_clients === false ? '' : `<button class="chip nut-sua" data-act="sua" aria-pressed="${ui.edit ? 'true' : 'false'}" title="${esc(t.edit)}" aria-label="${esc(t.edit)}">✎</button>`}</div>
     ${bang}
-    ${tabBar(t, ui)}
     <div class="cay">
       <svg class="duong" aria-hidden="true"></svg>
       <div class="cot cot-isp">
@@ -653,6 +626,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
           <div class="nt"><span>${esc(tenRouter)}</span></div>
           <div class="phu">${core.cpu != null ? `${esc(t.cpu)} ${esc(core.cpu)}%` : ''} ${core.ram != null ? `· ${esc(t.ram)} ${esc(core.ram)}%` : ''}</div>
           <div class="phu">${core.uptime ? `${esc(t.uptime)} ${esc(fmtUptime(core.uptime, now))}` : ''} ${core.version ? `· RouterOS ${esc(core.version)}` : ''}</div>
+        ${renderRouterBox(model, cfg, ui, t)}
         </div>
         <div class="tieu-nhom">${esc(t.ports)} · LAN</div>
         ${[...bridges, ...ppp].map((g) => hangCong(g)).join('')}
@@ -719,7 +693,11 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .sua label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--secondary-text-color)}
 .sua label.ngang{flex-direction:row;align-items:center;gap:8px}
 .hang-nut{display:flex;gap:8px}
-.may-the .the-may{min-height:620px}
+.cot-router{min-width:280px}
+.cot-router .nut-node.chinh{min-height:520px}
+.rtab-hang{display:flex;gap:6px;margin:10px 0 8px;flex-wrap:wrap}
+.rtab{padding:6px 14px;border-radius:14px;border:1px solid var(--divider-color,#555);background:transparent;color:var(--secondary-text-color);cursor:pointer;font:inherit}
+.rtab.on{color:var(--primary-color,#03a9f4);border-color:var(--primary-color,#03a9f4)}
 .tab-con-hang{display:flex;gap:6px;padding:0 12px 10px;flex-wrap:wrap}
 .tab-con{padding:5px 12px;border-radius:12px;border:1px solid var(--divider-color,#555);background:transparent;color:var(--secondary-text-color);cursor:pointer;font:inherit;font-size:.9rem}
 .tab-con.on{color:var(--primary-color,#03a9f4);border-color:var(--primary-color,#03a9f4)}
@@ -732,9 +710,6 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .chon-cong{display:flex;gap:6px;align-items:center;padding:4px 8px;border:1px solid var(--divider-color,#444);border-radius:10px}
 .cong-the{margin-bottom:8px}
 .cong-chi-tiet{margin:0 0 4px 26px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0 18px}
-.tabs-the{display:flex;gap:6px;padding:4px 12px 8px}
-.tab-the{padding:6px 12px;border-radius:14px;border:1px solid var(--divider-color,#555);background:transparent;color:var(--secondary-text-color);cursor:pointer;font:inherit}
-.tab-the.on{color:var(--primary-color,#03a9f4);border-color:var(--primary-color,#03a9f4)}
 .hang-chip{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
 .chi-tiet{margin:-2px 0 6px 26px;font-size:.85rem}
 .vpn-khoi{margin:4px 0 8px 10px;padding-left:8px;border-left:2px solid var(--divider-color,#555)}
@@ -861,8 +836,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
           this._luu(); this._ve(true);
         });
       }
-      r.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._ui.tab = b.dataset.tab; this._ve(true); }));
-      r.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { this._ui.sub = b.dataset.sub; this._ve(true); }));
+      r.querySelectorAll('[data-rtab]').forEach((b) => b.addEventListener('click', () => { this._ui.rtab = b.dataset.rtab; this._ve(true); }));
       r.querySelectorAll('[data-port]').forEach((c) => c.addEventListener('change', () => {
         const hien = new Set(String((r.querySelector('.bridge-khoi') || {}).dataset ? r.querySelector('.bridge-khoi').dataset.members : '').split(',').filter(Boolean));
         if (c.checked) hien.add(c.dataset.port); else hien.delete(c.dataset.port);
