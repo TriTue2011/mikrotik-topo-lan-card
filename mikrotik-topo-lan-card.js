@@ -106,9 +106,12 @@ export function discover(states, cfg = {}) {
       gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
       if (typeof a.running === 'boolean') gd.running = a.running;
     } else if ((m = reCongSwitch.exec(eid))) {
-      const gd = lay(m[1], m[2]);
-      gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
-      gd.running = typeof a.running === 'boolean' ? a.running : on(s.state);
+      // Giao diện WireGuard (type wg) là đường hầm VPN: hiện ở mục VPN, không ở danh sách cổng.
+      if (String(a.type || '').toLowerCase() !== 'wg') {
+        const gd = lay(m[1], m[2]);
+        gd.name = a.name || gd.name; gd.comment = a.comment || gd.comment; gd.type = a.type || gd.type;
+        gd.running = typeof a.running === 'boolean' ? a.running : on(s.state);
+      }
     } else if ((m = reKetNoi.exec(eid))) {
       lay(m[1], m[2]).running = on(s.state);
     } else if ((m = reWg.exec(eid))) {

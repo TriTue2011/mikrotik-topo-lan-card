@@ -249,3 +249,12 @@ test('WireGuard: tổng byte (B) và handshake không bị coi là tốc độ; 
   assert.match(html, /bắt tay 116 s trước/);
   assert.match(html, /↓ 1\.05 GB ↑ 177\.8 MB/);
 });
+
+test('giao diện WireGuard (type wg, ví dụ mik-hk) không lẫn vào danh sách cổng nội bộ', () => {
+  const st = {
+    'switch.mikrotik_router_port_mik_hk_port': { state: 'on', attributes: { name: 'mik-hk', type: 'wg', running: true, comment: '' } },
+    'switch.mikrotik_router_port_ether3_port': { state: 'off', attributes: { name: 'ether4', type: 'ether', running: false, comment: '' } },
+  };
+  const m = discover(st, {});
+  assert.deepEqual(m.ports.map((p) => p.id), ['ether3']);
+});
