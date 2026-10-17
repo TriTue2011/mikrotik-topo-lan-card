@@ -329,7 +329,7 @@ export function dungNut(cfg = {}, userNodes = [], clients = []) {
       // Nguồn của LXC/VM: guest_source (tên switch/bộ phát) nếu khai; không thì switch mà host đang nối vào.
       const nguon = h.guest_source ? ((nut.find((n) => n.name === h.guest_source) || {}).key || khoa) : (cha || khoa);
       nut.push({ key: `${khoa}-${mac.replace(/:/g, '')}`, kind: KIND_SWITCH, name: String(c.name || c.ip || mac).slice(0, 60),
-        port: '', parent: nguon, macs: [mac], ips: [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', guest: true });
+        port: '', parent: nguon, macs: [mac], ips: [], entity: '', tuDong: false, nguon: 'cfg', macSensor: '', guest: true, host: khoa });
     }
   };
   (cfg.hosts || []).forEach((h, i) => {
@@ -614,11 +614,13 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   // Cây: hộp cha bên trái; cấp dưới và thiết bị gắn vào nó nằm cột bên phải, mỗi thiết bị một hộp nhỏ.
   const treeNode = (n) => {
     if (n.guest) return `<div class="tree-hang">${nutCon(n)}</div>`;
-    const kids = nut.filter((x) => x.parent === n.key);
+    // LXC/VM (host = hộp này) nằm TRONG hộp host; nét đứt vẫn đi từ nguồn của chúng.
+    const trong = nut.filter((x) => x.host === n.key).map(treeNode).join('');
+    const kids = nut.filter((x) => x.parent === n.key && !x.host);
     const g = nhomCua(n);
     const devs = (!n.box && g && hienMay) ? g.hien.map((c) => hopMay(c, `dev-${esc(macChuan(c.mac))}`)) : [];
     const phai = [...kids.map(treeNode), ...devs].join('');
-    return `<div class="tree-hang">${nutCon(n)}${phai ? `<div class="tree-con">${phai}</div>` : ''}</div>`;
+    return `<div class="tree-hang">${nutCon(n, trong)}${phai ? `<div class="tree-con">${phai}</div>` : ''}</div>`;
   };
   // Một nhánh = một cổng MikroTik, bên phải là các nút cắm vào cổng đó.
   const nhanhCong = (pt) => {
