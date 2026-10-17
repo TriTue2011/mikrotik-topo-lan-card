@@ -362,6 +362,14 @@ export function phanNhom(clients, cfg = {}, gan = {}, states = {}, userNodes = [
   }));
   // Bộ phát tự báo danh sách máy WiFi của nó: đó là khai báo RÕ (chính xác hơn mọi suy đoán theo cổng).
   for (const n of nut) if (n.clientsSensor) n.macs = [...n.macs, ...thietBiTuCamBien(n.clientsSensor, states).map((c) => c.mac)];
+  // Chính router của bộ phát (ví dụ ZTE 172.16.10.24) là thiết bị của nó, không phải máy LAN: lấy IP từ cảm biến chính
+  // sensor.<tên>_connected_devices → sensor.<tên> (thuộc tính host).
+  for (const n of nut) {
+    if (!n.clientsSensor) continue;
+    const goc = states[n.clientsSensor.replace(/_connected_devices$/, '')];
+    const host = goc && goc.attributes && goc.attributes.host;
+    if (host && !n.ips.includes(String(host))) n.ips = [...n.ips, String(host)];
+  }
   const theoKey = new Map(nut.map((n) => [n.key, n]));
   const macCong = (cong) => (cfg.mac_sensor ? macTuCamBien(cfg.mac_sensor, cong, states) : []).map(macChuan);
   for (const n of nut) {
