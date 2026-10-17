@@ -93,7 +93,7 @@ test('hiển thị: nhóm ZTE có tiêu đề + nút gán; giới hạn số thi
   const ui = { aps: [{ i: 0, name: 'ZTE WiFi' }], gan: {}, states };
   const html = renderHtml(discover(states, cfg), cfg, ui);
   assert.match(html, /ZTE WiFi \(0\)/);
-  assert.match(html, /data-act="gan"/);
+  assert.match(html, /class="nguon-chon"/);
   assert.match(html, /Xem thêm/);
   const hit = renderHtml(discover(states, cfg), cfg, { ...ui, search: 'Thiết bị 07' });
   assert.match(hit, /Thiết bị 07/); assert.ok(!/Thiết bị 08/.test(hit));

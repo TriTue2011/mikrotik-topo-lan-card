@@ -420,7 +420,7 @@ export function lamSachGan(v) {
   for (const [k, g] of Object.entries(v)) {
     if (!/^[0-9a-f:-]{11,17}$/i.test(k)) continue;
     if (typeof g === 'number' && g >= 0 && g < 100) ra[macChuan(k)] = g;
-    else if (typeof g === 'string' && /^(sw|ap|u)-[a-z0-9_-]{1,40}$/.test(g)) ra[macChuan(k)] = g;
+    else if (typeof g === 'string' && /^[a-z0-9_.-]{1,80}$/i.test(g)) ra[macChuan(k)] = g;
   }
   return ra;
 }
@@ -546,14 +546,14 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     <div class="hang" data-anchor="ham-${esc(h.id)}" data-luu="${esc(Math.round(h.rx + h.tx))}">
       ${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span><span class="lu">${esc(h.connected ? t.connected : t.disconnected)}</span>${dongLuuLuong(h.rx, h.tx, t)}
     </div>`;
+  // Chọn nguồn cho thiết bị: một ô liệt kê các nút (switch, bộ phát, hộp host); «chưa gán» thì về nhóm LAN.
   const nutGan = (c) => {
     if (!nut.length) return '';
     const mac = macChuan(c.mac);
     const g = (ui.gan || {})[mac];
-    const hien = g == null ? -1 : nut.findIndex((n) => n.key === (typeof g === 'number' ? `ap-${g}` : g));
-    const dich = hien + 1 < nut.length ? nut[hien + 1] : null;
-    const nhan = dich ? `${t.assign} ${dich.name}` : t.unassign;
-    return `<button class="gan" data-act="gan" data-mac="${esc(mac)}" title="${esc(nhan)}" aria-label="${esc(nhan)}">📶</button>`;
+    const chon = g == null ? '' : (typeof g === 'number' ? `ap-${g}` : g);
+    const tuyChon = nut.filter((n) => !n.guest).map((n) => `<option value="${esc(n.key)}" ${chon === n.key ? 'selected' : ''}>${esc(n.name)}</option>`).join('');
+    return `<select class="nguon-chon" data-mac="${esc(mac)}" aria-label="${esc(t.assign)}"><option value="">${esc(t.unassign)}</option>${tuyChon}</select>`;
   };
   const wifi = thongTinWifi(cfg, ui.states || {});
   const chipWifi = (c) => {
@@ -875,6 +875,11 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
         // nút cha bị xoá → nút con mất cha (không treo); gán tay vào nút đã xoá bị bỏ
         this._ui.nodes = this._ui.nodes.filter((u) => u.id !== id).map((u) => (u.parent === `node:${key}` ? { ...u, parent: '' } : u));
         for (const [mac, g] of Object.entries(this._ui.gan)) if (g === key) delete this._ui.gan[mac];
+        this._luu(); this._ve(true);
+      }));
+      r.querySelectorAll('.nguon-chon').forEach((sel) => sel.addEventListener('change', () => {
+        const mac = sel.dataset.mac;
+        if (sel.value) this._ui.gan[mac] = sel.value; else delete this._ui.gan[mac];
         this._luu(); this._ve(true);
       }));
       r.querySelectorAll('[data-act="gan"]').forEach((nut) => nut.addEventListener('click', () => {
