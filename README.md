@@ -89,6 +89,7 @@ Card tự nhận WAN (cổng PPPoE/L2TP…), cổng, bridge, đường hầm Wir
 | `router_name`, `isp_name` | | Tên hiển thị cho nút router / ISP |
 | `port_names` | | `{ether1: "Bộ phát WiFi"}` — đặt tên cổng |
 | `port_speed_sensors` | | `{ether2: {rx: sensor.sw1_nhan_mbit, tx: sensor.sw1_gui_mbit}}` — lấy tốc độ cổng từ cảm biến khác (ví dụ SNMP + Derivative, cập nhật vài giây) thay cho cảm biến của tích hợp MikroTik. Khoá là id hoặc tên cổng (`ether2`, `bridgelan`). Cảm biến chưa có số hoặc đơn vị không phải tốc độ (`Mbit/s`, `kB/s`…) thì card giữ giá trị cũ |
+| `topo_sensor` | | Cảm biến `…_cay_thiet_bi` của `mikrotik_snmp`: card tự dựng hộp và nối thiết bị (xem mục «Tự nối thiết bị vào sơ đồ») |
 | `hide_ports` | | Danh sách id cổng/đường hầm cần ẩn |
 | `show_clients` | `true` | Hiện cột thiết bị |
 | `client_limit` | `30` | Số thiết bị hiện ban đầu (có nút «Xem thêm») |
@@ -143,6 +144,19 @@ command_line:
 ```
 (`secrets` không tự thay trong chuỗi lệnh: dùng `shell_command`/biến môi trường theo cách bạn quen, hoặc chép mật khẩu vào tệp chỉ root đọc được.) Thêm `--tls --port 8729 --insecure` nếu dùng API-SSL với chứng chỉ tự ký.
 Thuộc tính của cảm biến đặt theo **tên cổng** (`ether2`…) khớp với cổng bạn cho nút cắm vào.
+
+## Tự nối thiết bị vào sơ đồ từ cây thiết bị (`topo_sensor`, từ 0.8.0)
+Với tích hợp [`mikrotik_snmp`](https://github.com/TriTue2011/mikrotik_snmp) (MikroTik qua SNMP + ZTE E2633), chỉ cần một dòng:
+```yaml
+type: custom:mikrotik-topo-lan-card
+prefix: mikrotik_router
+topo_sensor: sensor.mikrotik_router_cay_thiet_bi
+port_names: { ether2: SW1, ether4: SW2, bridgelan: BRIDGE LAN }   # (tuỳ chọn) đặt tên hộp theo cổng
+```
+Card đọc thuộc tính `nodes` và `clients` của cảm biến đó rồi **tự dựng hộp** (mỗi cổng có máy thành một switch, mỗi bộ phát ZTE thành một bộ phát nối vào cổng/switch nó cắm) và
+**đặt từng máy vào hộp của cha nó**; máy WiFi nằm trong hộp ZTE kèm băng tần, tín hiệu, chế độ. **Thiết bị mới trong mạng tự có mặt và tự nối vào đúng hộp**, không cần `device_sources`
+hay `sources`. Hộp bạn đã khai tay (`switches`, `access_points`) được giữ nguyên: card chỉ thêm hộp còn thiếu, không tạo trùng (trùng cổng với switch có `port`, trùng tên hoặc IP với bộ phát).
+Máy mà tích hợp chưa biết nằm sau cổng nào (cha là router) thì không bị ép vào hộp nào.
 
 ## Tốc độ vào/ra từng thiết bị
 **Tự động**: mỗi máy trong tích hợp MikroTik là một thiết bị của Home Assistant có hai cảm biến **RX** và **TX** (đơn vị kB/s…). Card nối chúng với tracker của máy qua sổ thực thể của Home Assistant (hoặc theo tên: `device_tracker.cam_phong_khach` ↔ `sensor.cam_phong_khach_rx_mikrotik`, `sensor.cam_phong_khach_tx_mikrotik`) và hiện ↓ ↑ cạnh máy; bằng 0 thì ẩn. Không cần khai gì. Nếu máy không có hai cảm biến đó, bật theo tuỳ chọn theo dõi lưu lượng máy của tích hợp (tên tuỳ chọn tuỳ phiên bản tích hợp, **chưa đối chiếu**).

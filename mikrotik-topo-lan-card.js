@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -242,7 +242,49 @@ export function suaMuc(config, khoa, i, truong, gia) {
   return { ...(config || {}), [khoa]: ds };
 }
 
+/**
+ * Cây thiết bị của tích hợp `mikrotik_snmp` (cảm biến `cfg.topo_sensor`): {nodes, clients}. nodes: router/cổng/ZTE kèm `parent`;
+ * clients: mỗi máy có `parent` (id nút cha). Không có cảm biến hoặc thuộc tính hỏng → null.
+ */
+export function layCay(cfg = {}, states = {}) {
+  const cb = cfg && cfg.topo_sensor ? (states || {})[cfg.topo_sensor] : null;
+  const a = cb && cb.attributes ? cb.attributes : null;
+  if (!a || !Array.isArray(a.nodes) || !Array.isArray(a.clients)) return null;
+  return {
+    nodes: a.nodes.filter((n) => n && typeof n === 'object' && n.id),
+    clients: a.clients.filter((c) => c && typeof c === 'object' && /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(String(c.mac || ''))).slice(0, 500)
+  };
+}
+
+/** Tên hộp trên card cho một nút của cây: tên do người dùng đặt trong `port_names`, không có thì tên của nút. */
+const tenHopCay = (cfg, n) => String(((cfg.port_names || {})[n.id]) || n.name || n.id).slice(0, 60);
+
+/**
+ * Với `topo_sensor`: TỰ dựng hộp từ cây — mỗi cổng có máy (hoặc có bộ phát cắm vào) thành một switch, mỗi nút `ap` thành một bộ phát nối vào cổng/switch cha.
+ * Hộp người dùng đã khai (switch có cùng `port`, bộ phát cùng tên hoặc cùng IP) được GIỮ NGUYÊN, không tạo trùng.
+ */
+function themHopTuCay(cfg, cay) {
+  const switches = [...(cfg.switches || [])];
+  const aps = [...(cfg.access_points || [])];
+  const coCon = new Set(cay.clients.map((c) => c.parent));
+  for (const n of cay.nodes) if (n.kind === 'ap' && n.parent) coCon.add(n.parent);
+  const an = new Set(cfg.hide_ports || []);
+  for (const n of cay.nodes) {
+    if (n.kind === 'router' || n.kind === 'ap' || !coCon.has(n.id) || an.has(n.id)) continue;
+    if (!switches.some((w) => w && w.port === n.id)) switches.push({ name: tenHopCay(cfg, n), port: n.id });
+  }
+  for (const n of cay.nodes) {
+    if (n.kind !== 'ap') continue;
+    if (aps.some((a) => a && (a.name === n.name || (n.ip && (a.ips || []).includes(n.ip))))) continue;
+    const sw = switches.find((w) => w && w.port === n.parent);
+    aps.push({ name: n.name || 'ZTE WiFi', ...(sw ? { switch: sw.name } : (n.parent && n.parent !== 'router' ? { port: n.parent } : {})), ips: n.ip ? [n.ip] : [] });
+  }
+  return { ...cfg, switches, access_points: aps };
+}
+
 export function autoCauHinh(states = {}, cfg = {}) {
+  const cay = layCay(cfg, states);
+  if (cay) cfg = themHopTuCay(cfg, cay);
   if (!cfg.zte_port || (cfg.access_points && cfg.access_points.length)) return cfg;
   const id = Object.keys(states || {}).find((e) => /^sensor\..+_connected_devices$/.test(e)
     && states[e] && states[e].attributes && Array.isArray(states[e].attributes.clients));
@@ -332,7 +374,32 @@ export function layNguon(cfg = {}, states = {}) {
   const ra = [];
   for (const a of cfg.access_points || []) if (a && a.clients_sensor) ra.push({ node: a.name || '', entity: a.clients_sensor, attribute: 'clients' });
   for (const sc of cfg.sources || []) if (sc && typeof sc === 'object') ra.push(sc);
-  return ra.map((sc) => ({ node: String(sc.node || ''), devices: phanTichNguon(sc, states) }));
+  const ket = ra.map((sc) => ({ node: String(sc.node || ''), devices: phanTichNguon(sc, states) }));
+  // Cây thiết bị (topo_sensor): mỗi máy thuộc hộp của cha nó. Hộp = bộ phát cùng tên/IP với nút `ap`, hoặc switch đặt trên đúng cổng đó.
+  const cay = layCay(cfg, states);
+  if (cay) {
+    const hopCua = (id) => {
+      const n = cay.nodes.find((x) => x.id === id);
+      if (!n || n.kind === 'router') return '';
+      if (n.kind === 'ap') {
+        const a = (cfg.access_points || []).find((x) => x && (x.name === n.name || (n.ip && (x.ips || []).includes(n.ip))));
+        return a ? String(a.name || n.name) : '';
+      }
+      const w = (cfg.switches || []).find((x) => x && x.port === id);
+      return w ? String(w.name || id) : '';
+    };
+    const theoHop = new Map();
+    for (const c of cay.clients) {
+      const hop = hopCua(c.parent);
+      if (!hop) continue;
+      if (!theoHop.has(hop)) theoHop.set(hop, []);
+      theoHop.get(hop).push(c);
+    }
+    for (const [hop, ds] of theoHop) {
+      ket.push({ node: hop, devices: ds.map((c) => chuanHoaThietBi({ mac: c.mac, ip: c.ip, name: c.name, band: c.band, rssi: c.rssi, mode: c.mode })).filter(Boolean) });
+    }
+  }
+  return ket;
 }
 
 /**
@@ -1035,7 +1102,7 @@ if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined')
           .map((x) => (x && x.mac_sensor && this._hass.states[x.mac_sensor] ? JSON.stringify(this._hass.states[x.mac_sensor].attributes) : '')),
         (this._cfg.access_points || []).map((x) => (x && x.clients_sensor && this._hass.states[x.clients_sensor] ? JSON.stringify(this._hass.states[x.clients_sensor].attributes) : '')),
         // Mọi thực thể cấu hình nhắc tới (sources, fields…) và tốc độ từng máy: đổi giá trị thì vẽ lại.
-        [...new Set(JSON.stringify(this._cfg).match(/"(?:entity|clients_sensor|mac_sensor)":"[^"]+"/g) || [])]
+        [...new Set(JSON.stringify(this._cfg).match(/"(?:entity|clients_sensor|mac_sensor|topo_sensor)":"[^"]+"/g) || [])]
           .map((k) => { const st = this._hass.states[k.split('":"')[1].slice(0, -1)]; return st ? [st.state, st.attributes] : null; }),
         thongTinWifi(cfgHl, this._hass.states, this._ui.entities)]);
       if (!ep && chuKy === this._chuKy) return;

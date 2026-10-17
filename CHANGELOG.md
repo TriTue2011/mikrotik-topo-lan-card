@@ -1,5 +1,9 @@
 # Lịch sử thay đổi
 
+## 0.8.0
+- **`topo_sensor`**: đọc cây thiết bị của tích hợp `mikrotik_snmp` (cổng, bộ phát ZTE, máy kèm cha). Card tự dựng hộp (switch theo cổng có máy, bộ phát nối vào cổng/switch cha) và đặt từng máy vào hộp của cha;
+  máy WiFi kèm băng tần, tín hiệu, chế độ. Thiết bị mới tự vào đúng hộp. Hộp người dùng đã khai được giữ nguyên (không tạo trùng). Vẽ lại khi cảm biến đổi.
+
 ## 0.7.0
 - **`port_speed_sensors`**: chỉ định cảm biến tốc độ nhận/gửi cho từng cổng (ví dụ lấy từ SNMP qua helper Derivative, cập nhật mỗi vài giây) thay cho cảm biến của tích hợp MikroTik (chu kỳ 30 giây). Không có số hoặc đơn vị lạ thì giữ giá trị cũ.
 
