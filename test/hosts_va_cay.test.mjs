@@ -52,3 +52,26 @@ test('mỗi LXC và máy host chỉ hiện MỘT lần (không trùng giữa h�
   assert.equal(g.clients.length, 1);
   assert.equal(g.clients[0].ip, '192.168.88.10');
 });
+
+test('hộp host cùng kiểu hộp MikroTik: tên + số máy ở dòng đầu, thông tin máy host ở dòng phụ, LXC bên trong', async () => {
+  const c = autoCauHinh(states, cfg({ hosts: [{ name: 'Proxmox', ip: '192.168.88.100', switch: 'SW2', guest_mac_prefix: 'bc:24:11' }] }));
+  const html = renderHtml(discover(states, c), c, { states });
+  const hop = html.slice(html.indexOf('nut-host'));
+  assert.match(hop, /<div class="nt">[\s\S]*?<span class="ten-hop">Proxmox \(2\)<\/span>/, 'dòng đầu: tên và số LXC');
+  assert.match(hop, /<div class="phu host-tt">[\s\S]*?192\.168\.88\.100/, 'IP của chính máy host nằm ở dòng phụ trong hộp');
+  assert.ok(hop.indexOf('Adguard') > hop.indexOf('host-tt'), 'các LXC nằm sau thông tin host');
+});
+
+test('điện thoại: con thụt vào so với cha, kèm đường dẫn; con đứng sau cha trong thứ tự hiển thị', async () => {
+  const { CSS } = await import('../mikrotik-topo-lan-card.js');
+  const mq = CSS.slice(CSS.indexOf('@media (max-width:820px){.cay{grid-template-columns:minmax(0,1fr)}'));
+  assert.match(mq, /\.tree-con\{[^}]*margin-left:12px[^}]*padding-left:10px[^}]*border-left:2px dashed/);
+  const c = autoCauHinh(states, cfg());
+  const html = renderHtml(discover(states, c), c, { states });
+  // Mỗi khối con (tree-con) đứng NGAY SAU hộp cha của nó: vị trí đầu tiên của «SW1»/«SW2» đứng trước khối con kế tiếp.
+  for (const cha of ['SW1', 'SW2']) {
+    const viTriCha = html.indexOf(`>${cha} (`);
+    assert.ok(viTriCha >= 0, `có hộp ${cha}`);
+    assert.ok(html.indexOf('class="tree-con"', viTriCha) > viTriCha, `khối con của ${cha} đứng sau ${cha}`);
+  }
+});

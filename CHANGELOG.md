@@ -1,5 +1,9 @@
 # Lịch sử thay đổi
 
+## 0.8.6
+- **Hộp host (Proxmox…) cùng kiểu hộp MikroTik**: viền nổi bật, dòng đầu là tên và số máy bên trong, thông tin chính máy host (tốc độ, MAC, IP, trường tuỳ chỉnh) ở các dòng phụ trong hộp, rồi các LXC/VM.
+- **Điện thoại (dưới 820 px): con thụt vào so với cha**, kèm đường dẫn nét đứt bên trái; con luôn đứng sau cha, thụt thêm một bậc cho mỗi cấp (SW → ZTE → máy WiFi; SW → host → LXC).
+
 ## 0.8.5
 - **Sửa: LXC/VM và máy host hiện hai lần khi dùng `hosts` cùng `topo_sensor`.** `topo_sensor` đã xếp các máy vào hộp theo cổng nên chiếm chỗ trước quy tắc `guest_mac_prefix` và `ip` của hộp host: hộp host chỉ nhận một bản rỗng (chỉ MAC), bản đầy đủ nằm lại ở hộp cổng. Nay khai báo cụ thể (LXC theo tiền tố MAC, máy host theo IP) thắng suy đoán theo cổng; mỗi máy hiện một lần, đầy đủ IP và tốc độ.
 

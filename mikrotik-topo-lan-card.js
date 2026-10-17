@@ -5,7 +5,7 @@
  * Giấy phép: MIT.
  */
 
-export const VERSION = '0.8.5';
+export const VERSION = '0.8.6';
 
 // ───────────────────────── tiện ích thuần (kiểm thử được, không cần trình duyệt) ─────────────────────────
 
@@ -883,8 +883,18 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
     const thongSoChu = chu ? thongSoMay(chu) : (n.box && (n.ips.length || n.macs.length) ? `<span class="lu">${esc(n.macs[0] || '')}</span><span class="lu">${esc(n.ips[0] || '')}</span>` : '');
     const xoaNut = n.nguon === 'user' && ui.edit ? `<button class="xoa" data-act="xoa-nut" data-key="${esc(n.key)}" title="${esc(t.del)}" aria-label="${esc(t.del)}">×</button>` : '';
     const dem = ` (${esc(n.box ? demCon(n) : sl)})`;
-    return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}${n.box ? ' hop-chua' : ''}" data-anchor="n-${esc(n.key)}" data-luu="0">
-      <div class="tieu-nhom nhom-may${n.box || chu ? ' hop-tieu-to' : ''}">${n.kind === KIND_AP || chu ? chamTrangThai(chu ? chu.online : n.online) : ''}${n.kind === KIND_AP ? '📶 ' : n.box ? '' : '⇄ '}<span class="ten-hop">${esc(n.name)}${dem}</span>${thongSoChu}${xoaNut}</div>
+    if (n.box) {
+      // Hộp host (Proxmox…) cùng kiểu hộp MikroTik: viền nổi bật, dòng đầu là tên + số máy, thông tin máy host nằm đủ ở các dòng phụ, rồi các LXC/VM.
+      return `<div class="nut-con sw hop-chua nut-host" data-anchor="n-${esc(n.key)}" data-luu="0">
+        <div class="nt">${chamTrangThai(chu ? chu.online : n.online)}<span class="ten-hop">${esc(n.name)}${dem}</span>${xoaNut}</div>
+        ${thongSoChu ? `<div class="phu host-tt">${thongSoChu}</div>` : ''}
+        ${truong ? `<div class="hop-dong">${truong}</div>` : ''}
+        ${rows}
+        ${inner}
+      </div>`;
+    }
+    return `<div class="nut-con ${n.kind === KIND_AP ? 'ap' : 'sw'}" data-anchor="n-${esc(n.key)}" data-luu="0">
+      <div class="tieu-nhom nhom-may${chu ? ' hop-tieu-to' : ''}">${n.kind === KIND_AP || chu ? chamTrangThai(chu ? chu.online : n.online) : ''}${n.kind === KIND_AP ? '📶 ' : n.box ? '' : '⇄ '}<span class="ten-hop">${esc(n.name)}${dem}</span>${thongSoChu}${xoaNut}</div>
       ${truong ? `<div class="hop-dong">${truong}</div>` : ''}
       ${rows}
       ${inner}
@@ -954,6 +964,10 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .cay{position:relative;display:grid;grid-template-columns:minmax(300px,1fr) minmax(0,3fr);gap:24px;align-items:start}
 .tree-hang{display:flex;gap:16px;align-items:flex-start;margin-bottom:10px}
 .nut-con.hop-chua>.nut-con{margin-top:8px}
+.nut-host{border:1px solid var(--primary-color,#03a9f4);background:var(--card-background-color,#fff);padding:10px 12px;border-radius:12px}
+.nut-host>.nt{font-size:1rem}
+.nut-host .host-tt{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;margin:2px 0 6px}
+.nut-host>.dev-hop,.nut-host>.hang{margin-top:6px}
 .dev-hop{border:1px solid var(--divider-color,#444);border-radius:10px;margin-bottom:6px}
 .tree-con{display:grid;grid-template-columns:max-content;justify-content:start;gap:10px;flex:0 1 auto;min-width:0}
 .tree-con>*{min-width:0}
@@ -1026,7 +1040,7 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .vpn-khoi.ra{border-left-style:dashed}
 .vpn-cong .ten{font-weight:600}
 @media (max-width:820px){.cay{grid-template-columns:1fr;gap:12px}.duong{display:none}}
-@media (max-width:820px){.cay{grid-template-columns:minmax(0,1fr)}.cot-router{min-width:0}.tree-hang{flex-direction:column;gap:8px}.tree-con{grid-template-columns:minmax(0,1fr);width:100%}.tree-con>*{min-width:0}.hang{flex-wrap:wrap}.nut-con,.dev-hop{max-width:100%;box-sizing:border-box}}
+@media (max-width:820px){.cay{grid-template-columns:minmax(0,1fr)}.cot-router{min-width:0}.tree-hang{flex-direction:column;gap:8px}.tree-con{grid-template-columns:minmax(0,1fr);width:auto;margin-left:12px;padding-left:10px;border-left:2px dashed var(--primary-color,#03a9f4)}.tree-con>*{min-width:0}.hang{flex-wrap:wrap}.nut-con,.dev-hop{max-width:100%;box-sizing:border-box}}
 @media (prefers-reduced-motion:reduce){.duong path.chay{animation:none}}
 `;
 
