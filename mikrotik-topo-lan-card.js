@@ -171,7 +171,8 @@ export function discover(states, cfg = {}) {
       || null;
   const an = new Set(cfg.hide_ports || []);
   const tenCong = cfg.port_names || {};
-  const hienThi = (g) => ({ ...g, label: tenCong[g.id] || g.comment || g.name });
+  // Tên hiển thị: người dùng đặt trong port_names; không có thì dùng tên trong MikroTik (không dùng chú thích).
+  const hienThi = (g) => ({ ...g, label: tenCong[g.id] || g.name });
   // Cổng tên WAN thuộc đường ra Internet, không hiện như cổng nội bộ.
   const laWg = (g) => String(g.type || '').toLowerCase() === 'wg';
   const ports = tatCa.filter((g) => g.kind === 'port' && g !== wan && !laWg(g) && !an.has(g.id) && !/wan/i.test(g.name || '')).map(hienThi);
@@ -486,7 +487,7 @@ function renderRouterBox(model, cfg, ui, t, hangCong) {
     </div>`;
   const bridgeHtml = `<div class="hop-con bridge-khoi" data-members="${esc(thanhVien.join(','))}">
       <div class="tieu-nhom">BRIDGE LAN</div>
-      ${br ? hangCong({ ...br, label: br.name || 'BridgeLAN' }) : ''}
+      ${br ? hangCong({ ...br, label: (cfg.port_names || {})[br.id] || br.name || 'BridgeLAN' }) : ''}
       ${ports.map((g) => `<div class="chon-dong"><label class="chon-cong"><input type="checkbox" data-port="${esc(g.name)}" ${thanhVien.includes(g.name) ? 'checked' : ''}></label>${hangCong(g)}</div>`).join('') || `<div class="phu">${esc(t.chuaCo)}</div>`}
     </div>`;
   return `${wanHtml}${bridgeHtml}`;
@@ -715,6 +716,7 @@ ha-card{padding:12px 14px;overflow:hidden;color:var(--primary-text-color)}
 .sua label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--secondary-text-color)}
 .sua label.ngang{flex-direction:row;align-items:center;gap:8px}
 .hang-nut{display:flex;gap:8px}
+.cot-router .hang .ten,.cot-cong .hang .ten{flex:1 1 auto;min-width:0}
 .cot-router .bridge-khoi .chon-dong{display:flex;align-items:center;gap:6px}
 .cot-router .bridge-khoi .chon-dong .hang{flex:1;min-width:0}
 .cot-router .bridge-khoi .chon-dong input{margin:0}
