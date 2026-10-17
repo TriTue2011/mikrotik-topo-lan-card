@@ -29,6 +29,24 @@ export function toBps(giaTri, donVi) {
   return he ? n * he : 0;
 }
 
+const DON_VI_BYTE = { b: 1, kb: 1e3, mb: 1e6, gb: 1e9, tb: 1e12 };
+
+export function toBytes(giaTri, donVi) {
+  const n = Number(giaTri);
+  if (!isFinite(n) || n < 0) return 0;
+  const he = DON_VI_BYTE[String(donVi || '').trim().toLowerCase()];
+  return he ? n * he : 0;
+}
+
+export function fmtBytes(b) {
+  if (!b || b < 1) return '0 B';
+  if (b >= 1e12) return (b / 1e12).toFixed(2) + ' TB';
+  if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB';
+  if (b >= 1e6) return (b / 1e6).toFixed(1) + ' MB';
+  if (b >= 1e3) return Math.round(b / 1e3) + ' kB';
+  return Math.round(b) + ' B';
+}
+
 export function fmtRate(bps) {
   if (!bps || bps < 1) return '0';
   if (bps >= 1e9) return (bps / 1e9).toFixed(2) + ' Gbps';
@@ -61,6 +79,7 @@ export function discover(states, cfg = {}) {
   const P = reEsc(tienTo);
   const reLuuLuong = new RegExp(`^sensor\\.${P}_(port|bridge|ppp)_(.+)_(rx|tx)$`);
   const reWg = new RegExp(`^sensor\\.${P}_wireguard_(.+)_(rx|tx)$`);
+  const reWgBatTay = new RegExp(`^sensor\\.${P}_wireguard_(.+)_last_handshake$`);
   const reKetNoi = new RegExp(`^binary_sensor\\.${P}_(port|bridge|ppp)_(.+)_connection$`);
   const reWgNoi = new RegExp(`^binary_sensor\\.${P}_wireguard_(.+)_connected$`);
   // MikroTik Extended: cổng và PPPoE là switch.<tiền_tố>_port_<id>_port và switch.<tiền_tố>_ppp_<id>_port.
@@ -73,7 +92,7 @@ export function discover(states, cfg = {}) {
     return giaoDien.get(k);
   };
   const ham = (id) => {
-    if (!duongHam.has(id)) duongHam.set(id, { id, name: id, connected: null, rx: 0, tx: 0 });
+    if (!duongHam.has(id)) duongHam.set(id, { id, name: id, connected: null, rx: 0, tx: 0, rxTong: 0, txTong: 0, batTay: null });
     return duongHam.get(id);
   };
   const may = [];
@@ -94,8 +113,14 @@ export function discover(states, cfg = {}) {
       lay(m[1], m[2]).running = on(s.state);
     } else if ((m = reWg.exec(eid))) {
       const h = ham(m[1]);
-      h[m[2]] = toBps(s.state, a.unit_of_measurement);
+      const donVi = String(a.unit_of_measurement || '').trim();
+      // HA báo lưu lượng WireGuard thường là tổng byte từ trước đến giờ (B), không phải tốc độ.
+      if (/\/s$/i.test(donVi)) h[m[2]] = toBps(s.state, donVi);
+      else h[m[2] + 'Tong'] = toBytes(s.state, donVi);
       h.name = (a.friendly_name || '').replace(/^.*WireGuard\s+/i, '').replace(/\s+(RX|TX)$/i, '') || h.name;
+    } else if ((m = reWgBatTay.exec(eid))) {
+      const giay = Number(s.state);
+      ham(m[1]).batTay = isFinite(giay) && giay >= 0 ? giay : null;
     } else if ((m = reWgNoi.exec(eid))) {
       ham(m[1]).connected = on(s.state);
     } else if (eid.startsWith('device_tracker.') && /mikrotik/i.test(a.attribution || '')) {
@@ -295,6 +320,7 @@ export function lamSachGan(v) {
 const CHU = {
   vi: {
     title: 'Mạng LAN MikroTik', internet: 'Internet', router: 'MikroTik', ports: 'Cổng', tunnels: 'Đường hầm VPN', clients: 'Thiết bị',
+    wgTitle: 'VPN WireGuard', batTay: 'bắt tay', truoc: 'trước', tong: 'tổng',
     search: 'Tìm tên, IP, MAC…', more: 'Xem thêm', none: 'Không có dữ liệu — kiểm tra tiền tố (prefix) và tích hợp MikroTik.',
     up: 'lên', down: 'xuống', online: 'đang kết nối', cpu: 'CPU', ram: 'RAM', uptime: 'Hoạt động', noClients: 'Chưa có thiết bị',
     connected: 'đã kết nối', disconnected: 'ngắt', assign: 'Gán vào', unassign: 'Bỏ gán', wifiHint: 'MAC riêng tư — thường là máy dùng WiFi',
@@ -304,6 +330,7 @@ const CHU = {
   },
   en: {
     title: 'MikroTik LAN', internet: 'Internet', router: 'MikroTik', ports: 'Ports', tunnels: 'VPN tunnels', clients: 'Devices',
+    wgTitle: 'VPN WireGuard', batTay: 'handshake', truoc: 'ago', tong: 'total',
     search: 'Search name, IP, MAC…', more: 'Show more', none: 'No data — check the prefix and the MikroTik integration.',
     up: 'up', down: 'down', online: 'online', cpu: 'CPU', ram: 'RAM', uptime: 'Uptime', noClients: 'No devices',
     connected: 'connected', disconnected: 'down', assign: 'Assign to', unassign: 'Unassign', wifiHint: 'Private MAC — usually a WiFi device',
@@ -335,7 +362,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const tieuDe = cfg.title || t.title;
   const tenRouter = cfg.router_name || t.router;
   const { core, wan, ports, bridges, ppp, tunnels, clients } = model;
-  const coDuLieu = !!(wan || ports.length || bridges.length || clients.length || core.cpu != null);
+  const coDuLieu = !!(wan || ports.length || bridges.length || tunnels.length || clients.length || core.cpu != null);
   if (!coDuLieu) return `<ha-card><div class="vo">${esc(t.none)}</div></ha-card>`;
 
   const tong = wan ? { rx: wan.rx, tx: wan.tx } : ports.reduce((s, p) => ({ rx: s.rx + p.rx, tx: s.tx + p.tx }), { rx: 0, tx: 0 });
@@ -355,6 +382,10 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
   const hangCong = (g) => `
     <div class="hang" data-anchor="cong-${esc(g.key)}" data-ids="${esc([g.id, g.name].map((x) => String(x).toLowerCase().replace(/\s+/g, '_')).join(' '))}" data-luu="${esc(Math.round(g.rx + g.tx))}" title="${esc(g.name)} · ${esc(g.type)} · ${esc(g.comment)}">
       ${chamTrangThai(g.running)}<span class="ten">${esc(g.label)}</span>${dongLuuLuong(g.rx, g.tx, t)}${thanh(g.rx + g.tx)}
+    </div>`;
+  const hangWg = (h) => `
+    <div class="hang ham ${h.connected ? '' : 'off'}" title="${esc(h.name)}">
+      ${chamTrangThai(h.connected)}<span class="ten">${esc(h.name)}</span>${h.batTay != null ? `<span class="lu">${esc(t.batTay)} ${esc(Math.round(h.batTay))} s ${esc(t.truoc)}</span>` : ''}<span class="lu">↓ ${esc(fmtBytes(h.rxTong))} ↑ ${esc(fmtBytes(h.txTong))}</span>
     </div>`;
   const hangHam = (h) => `
     <div class="hang" data-anchor="ham-${esc(h.id)}" data-luu="${esc(Math.round(h.rx + h.tx))}">
@@ -427,7 +458,7 @@ export function renderHtml(model, cfg = {}, ui = {}, now = Date.now()) {
       <div class="cot cot-cong">
         <div class="tieu-nhom">${esc(t.ports)}</div>
         ${[...bridges, ...ports, ...ppp].map((g) => hangCong(g)).join('')}
-        ${tunnels.length ? `<div class="tieu-nhom">${esc(t.tunnels)}</div>${tunnels.map(hangHam).join('')}` : ''}
+        ${tunnels.length ? `<div class="tieu-nhom">${esc(t.wgTitle)}</div>${tunnels.map(hangWg).join('')}` : ''}
       </div>
       ${cfg.show_clients === false ? '' : `<div class="cot cot-may">
         <div class="tieu-nhom">${esc(t.clients)} (${esc(ds.length)})</div>

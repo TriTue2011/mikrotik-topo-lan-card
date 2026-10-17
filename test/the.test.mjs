@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh } from '../mikrotik-topo-lan-card.js';
+import { esc, toBps, fmtRate, fmtUptime, discover, phanNhom, macRiengTu, renderHtml, dungNut, lamSachNutNguoiDung, lamSachGan, noiCam, thietBiTuCamBien, thongTinWifi, autoCauHinh, toBytes, fmtBytes } from '../mikrotik-topo-lan-card.js';
 
 const mang = JSON.parse(readFileSync(new URL('./fixtures/states.json', import.meta.url), 'utf8'));
 const states = Object.fromEntries(mang.map((s) => [s.entity_id, { state: s.state, attributes: s.attributes }]));
@@ -226,4 +226,26 @@ test('tự vẽ bộ phát ZTE: có cảm biến clients và khai zte_port thì 
   assert.equal(kq.nhom.find((g) => g.name === 'ZTE WiFi').clients.length, 1);
   assert.equal(autoCauHinh(st, {}).access_points, undefined, 'không khai zte_port thì không đoán');
   assert.equal(autoCauHinh(st, { zte_port: 'ether2', access_points: [{ name: 'Tay', port: 'ether2' }] }).access_points[0].name, 'Tay');
+});
+
+test('WireGuard: tổng byte (B) và handshake không bị coi là tốc độ; hiển thị ở mục riêng «VPN WireGuard»', () => {
+  const st = {
+    'sensor.mikrotik_router_wireguard_phone_rx': { state: '1047148576', attributes: { unit_of_measurement: 'B', friendly_name: 'Mikrotik router WireGuard Phone RX' } },
+    'sensor.mikrotik_router_wireguard_phone_tx': { state: '177821448', attributes: { unit_of_measurement: 'B', friendly_name: 'Mikrotik router WireGuard Phone TX' } },
+    'sensor.mikrotik_router_wireguard_phone_last_handshake': { state: '116', attributes: { unit_of_measurement: 's', friendly_name: 'Phone Last Handshake' } },
+    'binary_sensor.mikrotik_router_wireguard_phone_connected': { state: 'on', attributes: { friendly_name: 'Phone Connected' } },
+  };
+  const m = discover(st, {});
+  const ph = m.tunnels.find((h) => h.id === 'phone');
+  assert.equal(ph.rxTong, 1047148576);
+  assert.equal(ph.txTong, 177821448);
+  assert.equal(ph.rx, 0, 'tổng byte không được coi là tốc độ');
+  assert.equal(ph.batTay, 116);
+  assert.equal(ph.connected, true);
+  assert.equal(fmtBytes(ph.rxTong), '1.05 GB');
+  assert.equal(fmtBytes(toBytes('512', 'kB')), '512 kB');
+  const html = renderHtml(m, {}, { states: st, gan: {}, nodes: [] });
+  assert.match(html, /VPN WireGuard/);
+  assert.match(html, /bắt tay 116 s trước/);
+  assert.match(html, /↓ 1\.05 GB ↑ 177\.8 MB/);
 });
