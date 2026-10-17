@@ -30,8 +30,9 @@ test('khám phá dữ liệu thật (đã ẩn danh): WAN, cổng, bridge, đư�
   assert.deepEqual(m.ports.map((p) => p.id).filter((i) => i.startsWith('ether')).sort(), ['ether1', 'ether2', 'ether3']);
   assert.ok(!m.ports.some((p) => /wan/i.test(p.name || '')), 'cổng WAN không nằm trong danh sách cổng nội bộ');
   assert.ok(m.bridges.some((b) => b.id === 'bridgelan'));
-  assert.ok(m.tunnels.length >= 3);
-  assert.equal(m.clients.length, 56);
+  // Chỉ hiện đường hầm và thiết bị đang kết nối: fixture có 2 peer kết nối (trên 3) và 25 máy home (trên 56).
+  assert.equal(m.tunnels.length, 2);
+  assert.equal(m.clients.length, 25);
   assert.equal(typeof m.core.cpu, 'number');
   const e1 = m.ports.find((p) => p.id === 'ether1');
   assert.ok(Math.abs(e1.rx - Number(states['sensor.mikrotik_router_port_ether1_rx'].state) * 8000) < 1, 'ether1 rx phải đổi từ kB/s');
@@ -40,7 +41,7 @@ test('khám phá dữ liệu thật (đã ẩn danh): WAN, cổng, bridge, đư�
 test('tiền tố sai → không thấy cổng/WAN; thiết bị (theo attribution) vẫn có; hoàn toàn trống → hiện lời nhắc, không ném lỗi', () => {
   const m = discover(states, { prefix: 'khong_co' });
   assert.equal(m.wan, null); assert.equal(m.ports.length, 0); assert.equal(m.tunnels.length, 0);
-  assert.equal(m.clients.length, 56, 'thiết bị nhận theo attribution MikroTik, không theo tiền tố');
+  assert.equal(m.clients.length, 25, 'thiết bị đang kết nối nhận theo attribution MikroTik, không theo tiền tố');
   const trong = discover({}, {});
   assert.equal(trong.wan, null); assert.equal(trong.clients.length, 0);
   assert.match(renderHtml(trong, {}), /Không có dữ liệu/);
@@ -331,4 +332,19 @@ test('trình sửa: đặt/xoá khoá, thêm/sửa/xoá mục switch và bộ ph
   c = xoaMuc(c, 'switches', 0);
   assert.equal('switches' in c, false, 'danh sách rỗng thì bỏ khoá');
   assert.equal(suaMuc({}, 'access_points', 3, 'name', 'x').access_points, undefined, 'sửa mục không tồn tại không làm hỏng');
+});
+
+test('chỉ hiện thiết bị đang kết nối: máy ngắt và VPN peer ngắt không xuất hiện trên card', () => {
+  const st = {
+    'device_tracker.may_on': { state: 'home', attributes: { attribution: 'Data provided by Mikrotik', mac: '02:00:00:00:00:41', ip: '192.168.3.41', host_name: 'May on', interface: 'ether2', source: 'arp' } },
+    'device_tracker.may_off': { state: 'not_home', attributes: { attribution: 'Data provided by Mikrotik', mac: '02:00:00:00:00:42', ip: '192.168.3.42', host_name: 'May off', interface: 'ether2', source: 'arp' } },
+    'binary_sensor.mikrotik_router_wireguard_laptop_connected': { state: 'off', attributes: { interface: 'wg-home', allowed_address: '192.16.0.3/32', friendly_name: 'laptop Connected' } },
+    'binary_sensor.mikrotik_router_wireguard_phone_connected': { state: 'on', attributes: { interface: 'wg-home', allowed_address: '192.16.0.2/32', friendly_name: 'Phone Connected' } },
+  };
+  const m = discover(st, {});
+  assert.deepEqual(m.clients.map((c) => c.name), ['May on']);
+  assert.deepEqual(m.tunnels.map((h) => h.id), ['phone']);
+  const html = renderHtml(m, {}, { states: st, gan: {}, nodes: [] });
+  assert.doesNotMatch(html, /May off/);
+  assert.doesNotMatch(html, /laptop/);
 });

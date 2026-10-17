@@ -169,9 +169,11 @@ export function discover(states, cfg = {}) {
   const pppKhac = tatCa.filter((g) => g.kind === 'ppp' && g !== wan && !an.has(g.id)).map(hienThi);
   return {
     core, wan: wan ? hienThi(wan) : null, ports, bridges, ppp: pppKhac,
-    tunnels: [...duongHam.values()].filter((h) => !an.has(h.id)),
-    vpn: { ifaces: vpnIfaces, peers: [...duongHam.values()].filter((h) => !an.has(h.id)) },
-    clients: may.sort((x, y) => (y.online - x.online) || x.name.localeCompare(y.name))
+    // Chỉ hiện đường hầm và thiết bị đang kết nối; peer báo ngắt (connected === false) thì không hiện.
+    tunnels: [...duongHam.values()].filter((h) => !an.has(h.id) && h.connected !== false),
+    vpn: { ifaces: vpnIfaces, peers: [...duongHam.values()].filter((h) => !an.has(h.id) && h.connected !== false) },
+    // Chỉ thiết bị báo đang kết nối (device_tracker = home); thiết bị ngắt không hiện trên card.
+    clients: may.filter((c) => c.online).sort((x, y) => x.name.localeCompare(y.name))
   };
 }
 
