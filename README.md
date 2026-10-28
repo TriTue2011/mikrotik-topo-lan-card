@@ -1,5 +1,7 @@
 # MikroTik Topo LAN Card
 
+[![Mở kho này trong HACS của bạn.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TriTue2011&repository=mikrotik-topo-lan-card&category=plugin)
+
 Card Lovelace cho Home Assistant vẽ **sơ đồ mạng LAN của router MikroTik**: Internet → MikroTik → bridge/cổng → switch, bộ phát WiFi (ZTE…) → từng thiết bị,
 kèm tốc độ thời gian thực, nối bằng **nét đứt**. Không cần plugin giao diện nào khác.
 
